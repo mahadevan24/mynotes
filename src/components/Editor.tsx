@@ -28,7 +28,6 @@ export const Editor: React.FC = () => {
     activeNote,
     updateNote,
     notes,
-    theme,
     syncState,
     setActiveNote,
     isFocusMode,
@@ -190,11 +189,7 @@ export const Editor: React.FC = () => {
     <div 
       className={cn(
         "relative flex flex-1 flex-col overflow-hidden rounded-2xl border transition-all duration-300 h-full",
-        isFocused ? (
-          theme === "reflect" ? "aura-border-reflect" : 
-          theme === "granola" ? "aura-border-granola" : 
-          "aura-border-solar"
-        ) : "border-white/5",
+        isFocused ? "aura-border-mono" : "border-white/5",
         "bg-[#050505]/40 backdrop-blur-xl"
       )}
     >
@@ -465,10 +460,7 @@ export const Editor: React.FC = () => {
                       <span 
                         onClick={handleLinkClick}
                         className={cn(
-                          "font-bold transition-colors underline underline-offset-4 cursor-pointer select-none",
-                          theme === "reflect" && "text-purple-400 hover:text-purple-300",
-                          theme === "granola" && "text-emerald-400 hover:text-emerald-300",
-                          theme === "solar" && "text-amber-400 hover:text-amber-300"
+                          "font-bold transition-colors underline underline-offset-4 cursor-pointer select-none text-zinc-300 hover:text-white"
                         )}
                       >
                         {children}

@@ -21,7 +21,6 @@ export const RightPanel: React.FC = () => {
     setSelectedDate,
     setActiveTab,
     createNote,
-    theme,
     backlinks,
     setRightSidebarCollapsed,
   } = useNotes();
@@ -163,11 +162,7 @@ export const RightPanel: React.FC = () => {
                 className={cn(
                   "relative h-6 w-6 rounded-md text-[10px] font-bold flex flex-col items-center justify-center transition-all mx-auto cursor-pointer",
                   isSelected
-                    ? theme === "reflect"
-                      ? "bg-purple-600 text-white shadow-md shadow-purple-600/30 font-extrabold"
-                      : theme === "granola"
-                      ? "bg-emerald-600 text-neutral-950 shadow-md shadow-emerald-600/30 font-extrabold"
-                      : "bg-amber-600 text-neutral-950 shadow-md shadow-amber-600/30 font-extrabold"
+                    ? "bg-white text-black shadow-md shadow-white/10 font-extrabold"
                     : isToday
                     ? "border border-zinc-700 text-white font-bold"
                     : "text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
@@ -182,11 +177,7 @@ export const RightPanel: React.FC = () => {
                       "absolute bottom-0.5 h-0.8 w-0.8 rounded-full",
                       isSelected
                         ? "bg-white"
-                        : theme === "reflect"
-                        ? "bg-purple-400 shadow-[0_0_4px_#a78bfa]"
-                        : theme === "granola"
-                        ? "bg-emerald-400 shadow-[0_0_4px_#34d399]"
-                        : "bg-amber-400 shadow-[0_0_4px_#fbbf24]"
+                        : "bg-zinc-400 shadow-[0_0_4px_rgba(255,255,255,0.4)]"
                     )}
                   />
                 )}

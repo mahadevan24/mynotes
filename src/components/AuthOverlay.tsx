@@ -12,7 +12,7 @@ interface AuthOverlayProps {
 }
 
 export const AuthOverlay: React.FC<AuthOverlayProps> = ({ isOpen, onClose }) => {
-  const { signIn, signUp, signInWithGoogle, theme } = useNotes();
+  const { signIn, signUp, signInWithGoogle } = useNotes();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,20 +75,10 @@ export const AuthOverlay: React.FC<AuthOverlayProps> = ({ isOpen, onClose }) => 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in select-none">
       <div 
-        className={cn(
-          "relative w-full max-w-md overflow-hidden rounded-2xl border bg-[#050505]/90 p-8 shadow-2xl backdrop-blur-2xl animate-fade-in-up",
-          theme === "reflect" && "border-purple-500/10 shadow-purple-500/5",
-          theme === "granola" && "border-emerald-500/10 shadow-emerald-500/5",
-          theme === "solar" && "border-amber-500/10 shadow-amber-500/5"
-        )}
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#050505]/90 p-8 shadow-2xl backdrop-blur-2xl animate-fade-in-up shadow-white/5"
       >
         {/* Glow overlay */}
-        <div className={cn(
-          "absolute -right-20 -top-20 -z-10 h-40 w-40 rounded-full blur-2xl opacity-20",
-          theme === "reflect" && "bg-purple-600",
-          theme === "granola" && "bg-emerald-600",
-          theme === "solar" && "bg-amber-600"
-        )} />
+        <div className="absolute -right-20 -top-20 -z-10 h-40 w-40 rounded-full blur-2xl opacity-10 bg-zinc-700" />
 
         {/* Close Button */}
         <button
@@ -99,12 +89,7 @@ export const AuthOverlay: React.FC<AuthOverlayProps> = ({ isOpen, onClose }) => 
         </button>
 
         <div className="flex flex-col items-center text-center">
-          <div className={cn(
-            "flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 border border-white/10 mb-4",
-            theme === "reflect" && "text-purple-400",
-            theme === "granola" && "text-emerald-400",
-            theme === "solar" && "text-amber-400"
-          )}>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 border border-white/10 mb-4 text-zinc-300">
             <Sparkles className="h-5 w-5 animate-pulse" />
           </div>
           <h2 className="text-xl font-bold tracking-tight text-white font-sans">
@@ -190,12 +175,7 @@ export const AuthOverlay: React.FC<AuthOverlayProps> = ({ isOpen, onClose }) => 
           <button
             type="submit"
             disabled={loading || !isFirebaseConfigured}
-            className={cn(
-              "w-full flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold text-white shadow-lg focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer hover:scale-[1.01] active:scale-95",
-              theme === "reflect" && "bg-gradient-to-r from-purple-500 to-indigo-600",
-              theme === "granola" && "bg-gradient-to-r from-emerald-500 to-teal-600",
-              theme === "solar" && "bg-gradient-to-r from-amber-500 to-orange-600"
-            )}
+            className="w-full flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold text-black bg-white hover:bg-zinc-200 shadow-lg focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer hover:scale-[1.01] active:scale-95"
           >
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -250,12 +230,7 @@ export const AuthOverlay: React.FC<AuthOverlayProps> = ({ isOpen, onClose }) => 
               setErrorMsg("");
               setSuccessMsg("");
             }}
-            className={cn(
-              "font-bold transition-colors disabled:opacity-30 cursor-pointer",
-              theme === "reflect" && "text-purple-400 hover:text-purple-300",
-              theme === "granola" && "text-emerald-400 hover:text-emerald-300",
-              theme === "solar" && "text-amber-400 hover:text-amber-300"
-            )}
+            className="font-bold transition-colors disabled:opacity-30 cursor-pointer text-white hover:text-zinc-300 underline"
           >
             {isSignUp ? "Sign In instead" : "Create Account"}
           </button>

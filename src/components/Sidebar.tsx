@@ -37,8 +37,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     notes,
     activeNote,
     setActiveNote,
-    theme,
-    setTheme,
     searchQuery,
     setSearchQuery,
     activeTab,
@@ -144,10 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div 
                 onClick={() => setCommandPaletteOpen(true)}
                 className={cn(
-                  "relative flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 border border-white/10 text-white font-mono text-xs font-extrabold shadow-md cursor-pointer transition-all hover:scale-105 active:scale-95",
-                  theme === "reflect" && "border-purple-500/30 shadow-purple-500/5",
-                  theme === "granola" && "border-emerald-500/30 shadow-emerald-500/5",
-                  theme === "solar" && "border-amber-500/30 shadow-amber-500/5"
+                  "relative flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 border border-white/10 text-white font-mono text-xs font-extrabold shadow-md cursor-pointer transition-all hover:scale-105 active:scale-95 border-white/20 shadow-white/5"
                 )}
                 title="Command Center"
               >
@@ -162,10 +157,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div 
                   onClick={() => setCommandPaletteOpen(true)}
                   className={cn(
-                    "relative flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 border border-white/10 text-white font-mono text-xs font-extrabold shadow-md cursor-pointer transition-all hover:scale-105 active:scale-95",
-                    theme === "reflect" && "border-purple-500/30 shadow-purple-500/5",
-                    theme === "granola" && "border-emerald-500/30 shadow-emerald-500/5",
-                    theme === "solar" && "border-amber-500/30 shadow-amber-500/5"
+                    "relative flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 border border-white/10 text-white font-mono text-xs font-extrabold shadow-md cursor-pointer transition-all hover:scale-105 active:scale-95 border-white/20 shadow-white/5"
                   )}
                 >
                   <span>mn</span>
@@ -225,9 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 ? "w-8 h-8 p-0" 
                 : "w-full justify-between px-2.5 py-2 text-xs font-semibold",
               activeTab === "all"
-                ? theme === "reflect" ? "bg-purple-950/20 text-white border-purple-950/40" 
-                  : theme === "granola" ? "bg-emerald-950/20 text-white border-emerald-950/40"
-                  : "bg-amber-950/20 text-white border-amber-950/40"
+                ? "bg-white/10 text-white border-white/20 shadow-sm"
                 : "text-zinc-400 hover:bg-white/[0.02] hover:text-white"
             )}
             title="All Documents"
@@ -251,9 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 ? "w-8 h-8 p-0" 
                 : "w-full justify-between px-2.5 py-2 text-xs font-semibold",
               activeTab === "daily"
-                ? theme === "reflect" ? "bg-purple-950/20 text-white border-purple-950/40" 
-                  : theme === "granola" ? "bg-emerald-950/20 text-white border-emerald-950/40"
-                  : "bg-amber-950/20 text-white border-amber-950/40"
+                ? "bg-white/10 text-white border-white/20 shadow-sm"
                 : "text-zinc-400 hover:bg-white/[0.02] hover:text-white"
             )}
             title="Daily Journal"
@@ -276,10 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={handleNewNote}
               className={cn(
-                "mt-4 flex h-8 w-8 items-center justify-center rounded-lg text-black shadow transition-all hover:scale-[1.03] active:scale-95 cursor-pointer shrink-0",
-                theme === "reflect" && "bg-gradient-to-r from-purple-500 to-indigo-600 text-white",
-                theme === "granola" && "bg-gradient-to-r from-emerald-400 to-teal-500 text-neutral-950",
-                theme === "solar" && "bg-gradient-to-r from-amber-400 to-orange-500 text-neutral-950"
+                "mt-4 flex h-8 w-8 items-center justify-center rounded-lg text-black shadow transition-all hover:scale-[1.03] active:scale-95 cursor-pointer shrink-0 bg-white hover:bg-zinc-200"
               )}
               title="Create Note"
             >
@@ -295,10 +280,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={handleNewNote}
                 className={cn(
-                  "flex items-center gap-0.5 rounded px-2 py-0.8 text-[10px] font-bold text-black shadow transition-all hover:scale-[1.03] active:scale-95 cursor-pointer",
-                  theme === "reflect" && "bg-gradient-to-r from-purple-500 to-indigo-600 text-white",
-                  theme === "granola" && "bg-gradient-to-r from-emerald-400 to-teal-500 text-neutral-950",
-                  theme === "solar" && "bg-gradient-to-r from-amber-400 to-orange-500 text-neutral-950"
+                  "flex items-center gap-0.5 rounded px-2 py-0.8 text-[10px] font-bold text-black shadow transition-all hover:scale-[1.03] active:scale-95 cursor-pointer bg-white hover:bg-zinc-200"
                 )}
               >
                 <Plus className="h-3 w-3" />
@@ -328,7 +310,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onTogglePin={togglePin}
                     hoveredNoteId={hoveredNoteId}
                     setHoveredNoteId={setHoveredNoteId}
-                    theme={theme}
                     formatDate={formatDate}
                   />
                 ))}
@@ -348,7 +329,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onTogglePin={togglePin}
                   hoveredNoteId={hoveredNoteId}
                   setHoveredNoteId={setHoveredNoteId}
-                  theme={theme}
                   formatDate={formatDate}
                 />
               ))
@@ -373,10 +353,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => setShowProfilePopover(!showProfilePopover)}
               className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 border border-white/10 text-xs font-bold text-zinc-400 cursor-pointer hover:text-white hover:border-white/20 transition-all mb-1",
-                theme === "reflect" && "hover:border-purple-500/20",
-                theme === "granola" && "hover:border-emerald-500/20",
-                theme === "solar" && "hover:border-amber-500/20"
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 border border-white/10 text-xs font-bold text-zinc-400 cursor-pointer hover:text-white hover:border-white/25 transition-all mb-1"
               )}
               title="Settings"
             >
@@ -391,10 +368,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="flex items-center gap-2 overflow-hidden w-full">
               <div className={cn(
-                "flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-white/5 border border-white/10 text-xs font-bold text-zinc-400 transition-all",
-                theme === "reflect" && "border-purple-500/20",
-                theme === "granola" && "border-emerald-500/20",
-                theme === "solar" && "border-amber-500/20"
+                "flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-white/5 border border-white/10 text-xs font-bold text-zinc-400 transition-all border-white/15"
               )}>
                 {user?.email ? user.email.slice(0, 2).toUpperCase() : "G"}
               </div>
@@ -423,7 +397,6 @@ interface NoteListItemProps {
   onTogglePin: (id: string) => void;
   hoveredNoteId: string | null;
   setHoveredNoteId: (id: string | null) => void;
-  theme: "reflect" | "granola" | "solar";
   formatDate: (str: string) => string;
 }
 
@@ -435,7 +408,6 @@ const NoteListItem: React.FC<NoteListItemProps> = ({
   onTogglePin,
   hoveredNoteId,
   setHoveredNoteId,
-  theme,
   formatDate,
 }) => {
   const isSelected = activeNote?.id === note.id;
@@ -448,23 +420,14 @@ const NoteListItem: React.FC<NoteListItemProps> = ({
       className={cn(
         "group relative flex flex-col gap-1 rounded-lg p-2.5 text-left transition-all cursor-pointer border border-transparent",
         isSelected
-          ? theme === "reflect"
-            ? "bg-purple-950/10 text-white border-purple-500/30 shadow-lg shadow-purple-500/5"
-            : theme === "granola"
-            ? "bg-emerald-950/10 text-white border-emerald-500/30 shadow-lg shadow-emerald-500/5"
-            : "bg-amber-950/10 text-white border-amber-500/30 shadow-lg shadow-amber-500/5"
+          ? "bg-white/5 text-white border-white/15 shadow-lg shadow-black/45"
           : "text-zinc-400 hover:bg-white/[0.02] hover:text-zinc-200"
       )}
     >
       {/* Dynamic Theme Glow Border on Selection */}
       {isSelected && (
         <div
-          className={cn(
-            "absolute -left-px top-1/4 h-1/2 w-1 rounded-r-full blur-[0.5px]",
-            theme === "reflect" && "bg-purple-400 shadow-[0_0_6px_#a78bfa]",
-            theme === "granola" && "bg-emerald-400 shadow-[0_0_6px_#34d399]",
-            theme === "solar" && "bg-amber-400 shadow-[0_0_6px_#fbbf24]"
-          )}
+          className="absolute -left-px top-1/4 h-1/2 w-1 rounded-r-full blur-[0.5px] bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)]"
         />
       )}
 
@@ -503,7 +466,7 @@ const NoteListItem: React.FC<NoteListItemProps> = ({
             <Pin
               className={cn(
                 "h-2.5 w-2.5 rotate-45",
-                note.is_pinned && "fill-purple-400 text-purple-400 rotate-0"
+                note.is_pinned && "fill-white text-white rotate-0"
               )}
             />
           </button>

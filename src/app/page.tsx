@@ -34,8 +34,6 @@ function CommandPalette() {
     createNote,
     isFocusMode,
     toggleFocusMode,
-    theme,
-    setTheme,
   } = useNotes();
 
   const [query, setQuery] = useState("");
@@ -68,7 +66,7 @@ function CommandPalette() {
         id: "action-new-note",
         title: "Create Standard Note",
         subtitle: "Add a new markdown text note",
-        icon: <FileText className="h-4 w-4 text-blue-400" />,
+        icon: <FileText className="h-4 w-4 text-zinc-400" />,
         handler: async () => {
           setActiveTab("all");
           const note = await createNote({ is_daily_note: false });
@@ -79,7 +77,7 @@ function CommandPalette() {
         id: "action-new-journal",
         title: "Create Daily Journal Entry",
         subtitle: "Start writing today's log",
-        icon: <Calendar className="h-4 w-4 text-violet-400" />,
+        icon: <Calendar className="h-4 w-4 text-zinc-400" />,
         handler: async () => {
           setActiveTab("daily");
           const todayStr = new Date().toISOString().split("T")[0];
@@ -105,34 +103,11 @@ function CommandPalette() {
         id: "action-toggle-focus",
         title: isFocusMode ? "Exit Zen Focus Mode" : "Enter Zen Focus Mode",
         subtitle: "Toggle minimalist workspace panels view",
-        icon: <Sparkles className="h-4 w-4 text-yellow-400" />,
+        icon: <Sparkles className="h-4 w-4 text-zinc-400" />,
         handler: () => {
           toggleFocusMode();
         }
-      },
-
-      {
-        id: "action-theme-reflect",
-        title: "Switch to Cosmic Aura Theme",
-        subtitle: "Deep violet energy fields theme",
-        icon: <Check className={cn("h-4 w-4 text-purple-400 opacity-0", theme === "reflect" && "opacity-100")} />,
-        handler: () => setTheme("reflect")
-      },
-      {
-        id: "action-theme-granola",
-        title: "Switch to Cyber Aura Theme",
-        subtitle: "Technical hacker green fields theme",
-        icon: <Check className={cn("h-4 w-4 text-emerald-400 opacity-0", theme === "granola" && "opacity-100")} />,
-        handler: () => setTheme("granola")
-      },
-      {
-        id: "action-theme-solar",
-        title: "Switch to Solar Aura Theme",
-        subtitle: "Warm amber productivity focus theme",
-        icon: <Check className={cn("h-4 w-4 text-amber-400 opacity-0", theme === "solar" && "opacity-100")} />,
-        handler: () => setTheme("solar")
-      },
-
+      }
     ];
 
     actions.forEach(action => {
@@ -227,12 +202,7 @@ function CommandPalette() {
       onClick={() => setCommandPaletteOpen(false)}
     >
       <div 
-        className={cn(
-          "w-full max-w-xl rounded-xl border border-white/5 bg-neutral-950/80 shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-2xl overflow-hidden animate-fade-in-up",
-          theme === "reflect" && "shadow-purple-500/5 border-purple-500/10",
-          theme === "granola" && "shadow-emerald-500/5 border-emerald-500/10",
-          theme === "solar" && "shadow-amber-500/5 border-amber-500/10"
-        )}
+        className="w-full max-w-xl rounded-xl border border-white/10 bg-neutral-950/80 shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] shadow-white/5 backdrop-blur-2xl overflow-hidden animate-fade-in-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input area */}
@@ -241,7 +211,7 @@ function CommandPalette() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search notes, shortcuts, themes, timers..."
+            placeholder="Search notes, shortcuts, timers..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -270,11 +240,7 @@ function CommandPalette() {
                 className={cn(
                   "w-full flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-left transition-all",
                   index === selectedIndex
-                    ? theme === "reflect" 
-                      ? "bg-purple-950/30 text-white border border-purple-500/20 shadow-sm"
-                      : theme === "granola"
-                      ? "bg-emerald-950/30 text-white border border-emerald-500/20 shadow-sm"
-                      : "bg-amber-950/30 text-white border border-amber-500/20 shadow-sm"
+                    ? "bg-white/10 text-white border border-white/20 shadow-sm"
                     : "text-zinc-400 hover:text-zinc-200 border border-transparent"
                 )}
               >
@@ -320,9 +286,7 @@ function WorkspaceContent() {
     rightSidebarCollapsed, 
     commandPaletteOpen, 
     setCommandPaletteOpen, 
-    theme,
     user,
-    setTheme,
     signOut
   } = useNotes();
   const [authOpen, setAuthOpen] = useState(false);
@@ -412,11 +376,8 @@ function WorkspaceContent() {
           {/* Compact Settings Popover */}
           <div 
             className={cn(
-              "absolute bottom-[72px] z-50 rounded-xl border bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-xl animate-fade-in-up",
-              leftSidebarCollapsed ? "left-6 w-64" : "left-6 w-[288px]",
-              theme === "reflect" && "border-purple-500/20 shadow-purple-500/10",
-              theme === "granola" && "border-emerald-500/20 shadow-emerald-500/10",
-              theme === "solar" && "border-amber-500/20 shadow-amber-500/10"
+              "absolute bottom-[72px] z-50 rounded-xl border border-white/10 bg-neutral-950/95 p-3.5 shadow-2xl backdrop-blur-xl animate-fade-in-up shadow-white/5",
+              leftSidebarCollapsed ? "left-6 w-64" : "left-6 w-[288px]"
             )}
           >
             <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-3">
@@ -437,61 +398,13 @@ function WorkspaceContent() {
                   setShowProfilePopover(false);
                   setAuthOpen(true);
                 }}
-                className={cn(
-                  "w-full mb-3 flex items-center justify-center gap-1.5 rounded-lg py-2 text-[10px] font-bold text-white transition-all hover:scale-[1.01] active:scale-95 shadow-md cursor-pointer",
-                  theme === "reflect" && "bg-gradient-to-r from-purple-500 to-indigo-600",
-                  theme === "granola" && "bg-gradient-to-r from-emerald-400 to-teal-500 text-neutral-950",
-                  theme === "solar" && "bg-gradient-to-r from-amber-400 to-orange-500 text-neutral-950"
-                )}
+                className="w-full mb-3 flex items-center justify-center gap-1.5 rounded-lg py-2 text-[10px] font-bold text-black transition-all hover:scale-[1.01] active:scale-95 shadow-md cursor-pointer bg-white hover:bg-zinc-200"
               >
                 <span>Sign In / Sync Notes</span>
               </button>
             )}
 
-            {/* Theme Switcher inside Dropdown */}
-            <div className="space-y-1.5 mb-3.5">
-              <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest block">
-                Workspace Theme
-              </span>
-              <div className="flex items-center justify-between rounded-lg bg-white/[0.01] p-0.5 border border-white/5">
-                <button
-                  onClick={() => setTheme("reflect")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-1 text-[9px] font-bold rounded-md transition-all cursor-pointer",
-                    theme === "reflect"
-                      ? "bg-purple-950/20 text-purple-400 border border-purple-500/20 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  )}
-                >
-                  <div className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_6px_rgba(167,139,250,0.8)]" />
-                  <span>Cosmic</span>
-                </button>
-                <button
-                  onClick={() => setTheme("granola")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-1 text-[9px] font-bold rounded-md transition-all cursor-pointer",
-                    theme === "granola"
-                      ? "bg-emerald-950/20 text-emerald-400 border border-emerald-500/20 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  )}
-                >
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                  <span>Cyber</span>
-                </button>
-                <button
-                  onClick={() => setTheme("solar")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-1 text-[9px] font-bold rounded-md transition-all cursor-pointer",
-                    theme === "solar"
-                      ? "bg-amber-950/20 text-amber-400 border border-amber-500/20 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  )}
-                >
-                  <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
-                  <span>Solar</span>
-                </button>
-              </div>
-            </div>
+
 
             {user && (
               <button

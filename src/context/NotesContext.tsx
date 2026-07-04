@@ -48,8 +48,7 @@ interface NotesContextType {
   loading: boolean;
   user: FirebaseUser | null;
   syncState: "local" | "syncing" | "synced" | "error";
-  theme: "reflect" | "granola" | "solar";
-  setTheme: (theme: "reflect" | "granola" | "solar") => void;
+
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   activeTab: "all" | "daily";
@@ -102,7 +101,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
-  const [theme, setTheme] = useState<"reflect" | "granola" | "solar">("reflect");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "daily">("all");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -132,11 +131,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!isClient) return;
 
-    // Load active theme choice
-    const savedTheme = localStorage.getItem("mynotes-theme") as "reflect" | "granola" | "solar";
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
+
 
     if (isFirebaseConfigured && auth) {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -151,12 +146,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  // Save theme selection
-  useEffect(() => {
-    if (isClient) {
-      localStorage.setItem("mynotes-theme", theme);
-    }
-  }, [theme]);
+
 
   // Automatically switch tab when standard note is activated in daily tab
   useEffect(() => {
@@ -506,8 +496,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loading,
         user,
         syncState,
-        theme,
-        setTheme,
+
         searchQuery,
         setSearchQuery,
         activeTab,

@@ -89,19 +89,9 @@ body {
 }
 
 /* Aura active glowing border effect */
-.aura-border-reflect {
-  box-shadow: 0 0 30px -5px rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-.aura-border-granola {
-  box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-.aura-border-solar {
-  box-shadow: 0 0 30px -5px rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+.aura-border-mono {
+  box-shadow: 0 0 30px -5px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Selection custom color */
