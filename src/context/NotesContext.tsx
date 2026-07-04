@@ -117,16 +117,10 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setLeftSidebarCollapsed = (collapsed: boolean) => {
     setLeftSidebarCollapsedState(collapsed);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("mynotes-left-sidebar-collapsed", JSON.stringify(collapsed));
-    }
   };
 
   const setRightSidebarCollapsed = (collapsed: boolean) => {
     setRightSidebarCollapsedState(collapsed);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("mynotes-right-sidebar-collapsed", JSON.stringify(collapsed));
-    }
   };
 
   // Command palette state
@@ -154,16 +148,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       setSyncState("local");
       loadNotes(null);
-    }
-
-    const savedLeftSidebar = localStorage.getItem("mynotes-left-sidebar-collapsed");
-    if (savedLeftSidebar !== null) {
-      setLeftSidebarCollapsedState(JSON.parse(savedLeftSidebar));
-    }
-
-    const savedRightSidebar = localStorage.getItem("mynotes-right-sidebar-collapsed");
-    if (savedRightSidebar !== null) {
-      setRightSidebarCollapsedState(JSON.parse(savedRightSidebar));
     }
   }, []);
 
