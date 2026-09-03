@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useNotes, Note } from "@/context/NotesContext";
 import {
   Pin,
@@ -80,6 +81,17 @@ export const Editor: React.FC = () => {
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     updateNote(activeNote.id, { title: e.target.value });
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+    e.preventDefault();
+    if (editMode !== "edit") {
+      flushSync(() => setEditMode("edit"));
+    }
+    textareaRef.current?.focus();
+    textareaRef.current?.setSelectionRange(0, 0);
   };
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -338,6 +350,7 @@ export const Editor: React.FC = () => {
           type="text"
           value={activeNote.title}
           onChange={handleTitleChange}
+          onKeyDown={handleTitleKeyDown}
           placeholder="Untitled Note"
           className="w-full bg-transparent text-2xl font-bold text-zinc-100 placeholder-zinc-800 outline-none mb-4 border-b border-transparent focus:border-white/5 pb-2 transition-colors font-sans shrink-0"
         />
