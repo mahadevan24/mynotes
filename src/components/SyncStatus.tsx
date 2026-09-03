@@ -8,7 +8,7 @@ export function SyncStatus({ onSignIn }: { onSignIn: () => void }) {
   const labels = {
     local: "Notes are saved on this device. Sign in to sync across devices.",
     syncing: "Syncing with Firebase…",
-    synced: "Saved to Firebase · Available on your other devices",
+    synced: "Saved to Firebase",
     offline: "Offline · Changes will upload when you reconnect",
     error: "Sync needs attention",
   };
