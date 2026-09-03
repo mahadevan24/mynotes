@@ -26,7 +26,7 @@ export interface Note {
 
 type SyncState = "local" | "syncing" | "synced" | "offline" | "error";
 type AuthResult = Promise<{ user?: User; error?: Error }>;
-type Mutation = { note: Note; kind: "create" | "update" | "delete"; patch?: Partial<Note>; failed?: boolean };
+type Mutation = { note: Note; kind: "create" | "update" | "delete"; patch?: Partial<Note>; failed?: boolean; acknowledged?: boolean };
 
 interface NotesContextType {
   notes: Note[];
@@ -221,6 +221,13 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
           if (session.current !== currentSession) return;
           remoteNotes.current = snapshot.docs.map(snap => decodeNote(snap.id, snap.data()));
           metadata.current = snapshot.metadata;
+          // A server snapshot delivered after acknowledgement is authoritative,
+          // including intervening edits or deletions from another device.
+          if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
+            pending.current.forEach((mutation, id) => {
+              if (mutation.acknowledged) pending.current.delete(id);
+            });
+          }
           refreshCloudView();
           setLoading(false);
         },
@@ -302,6 +309,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const currentUser = userRef.current;
     if (!db || !currentUser) return;
     const currentSession = session.current;
+    mutation.acknowledged = false;
     pending.current.set(mutation.note.id, mutation);
     refreshCloudView();
     const ref = doc(db, "notes", mutation.note.id);
@@ -310,7 +318,18 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
       : updateDoc(ref, mutation.patch!);
     void operation.then(() => {
       if (session.current !== currentSession || pending.current.get(mutation.note.id) !== mutation) return;
-      pending.current.delete(mutation.note.id);
+      // The write promise can resolve before onSnapshot delivers the new list.
+      // Keep the optimistic note until the listener can take over, or the
+      // selected journal disappears (and edits can revert) in that gap.
+      mutation.acknowledged = true;
+      const remote = remoteNotes.current.find(note => note.id === mutation.note.id);
+      const expected = mutation.kind === "update" ? mutation.patch! : mutation.note;
+      const reflected = mutation.kind === "delete" ? !remote : remote &&
+        Object.entries(expected).every(([key, value]) =>
+          JSON.stringify(remote[key as keyof Note]) === JSON.stringify(value));
+      if (!metadata.current.fromCache && !metadata.current.hasPendingWrites && reflected) {
+        pending.current.delete(mutation.note.id);
+      }
       saveRecovery(currentUser.uid, mutation.note.id);
       refreshCloudView();
     }).catch(error => {

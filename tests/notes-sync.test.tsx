@@ -62,6 +62,27 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Firebase note synchronization", () => {
+  it("keeps a daily journal selected when its save finishes before the snapshot arrives", async () => {
+    const write = deferred(); fake.setDoc.mockReturnValueOnce(write.promise);
+    const { result } = mount();
+    act(() => snapshot([]));
+    let created!: Note;
+    await act(async () => {
+      result.current.setActiveTab("daily");
+      created = await result.current.createNote({ is_daily_note: true, daily_date: "2026-09-03" });
+    });
+    expect(result.current.activeNote?.id).toBe(created.id);
+    await act(async () => write.resolve());
+    expect(result.current.notes).toEqual([created]);
+    expect(result.current.activeNote?.id).toBe(created.id);
+    expect(result.current.syncState).toBe("syncing");
+    act(() => snapshot([created]));
+    expect(result.current.activeNote?.id).toBe(created.id);
+    expect(result.current.syncState).toBe("synced");
+    act(() => snapshot([]));
+    expect(result.current.activeNote).toBeNull();
+  });
+
   it("uses the final cloud ID immediately and keeps rapid creates and edits", async () => {
     const { result } = mount();
     act(() => snapshot([]));
@@ -78,6 +99,71 @@ describe("Firebase note synchronization", () => {
     expect(fake.setDoc.mock.calls[1][1].content).toBe("typed immediately");
     expect(localStorage.getItem("mynotes-data")).toBeNull();
     expect(result.current.syncState).toBe("syncing");
+  });
+
+  it("finishes syncing when the saved journal snapshot arrives before acknowledgement", async () => {
+    const write = deferred(); fake.setDoc.mockReturnValueOnce(write.promise);
+    const { result } = mount();
+    act(() => snapshot([]));
+    let created!: Note;
+    await act(async () => {
+      created = await result.current.createNote({ is_daily_note: true, daily_date: "2026-09-03" });
+    });
+    act(() => snapshot([created]));
+    await act(async () => write.resolve());
+    expect(result.current.activeNote).toEqual(created);
+    expect(result.current.syncState).toBe("synced");
+    await act(() => result.current.signOut());
+    expect(fake.signOut).toHaveBeenCalledOnce();
+  });
+
+  it("keeps acknowledged journal edits over stale cached snapshots until the server catches up", async () => {
+    const write = deferred(); fake.updateDoc.mockReturnValueOnce(write.promise);
+    const { result } = mount();
+    const original = { ...note("journal"), is_daily_note: true, daily_date: "2026-09-03" };
+    act(() => { snapshot([original]); result.current.setActiveNote(original); });
+    await act(() => result.current.updateNote(original.id, { content: "Today's entry" }));
+    await act(async () => write.resolve());
+    act(() => snapshot([original], true));
+    expect(result.current.activeNote?.content).toBe("Today's entry");
+    expect(result.current.syncState).toBe("syncing");
+    // A later edit from another device is authoritative, even if it differs
+    // from the acknowledged write. Do not retain the optimistic draft forever.
+    act(() => snapshot([{ ...original, content: "Edited on another device" }]));
+    expect(result.current.activeNote?.content).toBe("Edited on another device");
+    expect(result.current.syncState).toBe("synced");
+  });
+
+  it("does not revive a deleted journal while waiting for its removal snapshot", async () => {
+    const write = deferred(); fake.deleteDoc.mockReturnValueOnce(write.promise);
+    const { result } = mount();
+    act(() => snapshot([note("journal")]));
+    await act(() => result.current.deleteNote("journal"));
+    await act(async () => write.resolve());
+    expect(result.current.notes).toEqual([]);
+    act(() => snapshot([]));
+    expect(result.current.syncState).toBe("synced");
+  });
+
+  it("keeps a newer edit when an earlier journal write is acknowledged", async () => {
+    const firstWrite = deferred(); fake.setDoc.mockReturnValueOnce(firstWrite.promise);
+    const secondWrite = deferred(); fake.setDoc.mockReturnValueOnce(secondWrite.promise);
+    const { result } = mount();
+    act(() => snapshot([]));
+    let created!: Note;
+    await act(async () => {
+      created = await result.current.createNote({ is_daily_note: true, daily_date: "2026-09-03" });
+      await result.current.updateNote(created.id, { content: "Started writing" });
+    });
+    await act(async () => firstWrite.resolve());
+    act(() => snapshot([created]));
+    expect(result.current.activeNote?.content).toBe("Started writing");
+    const edited = result.current.activeNote!;
+    await act(async () => secondWrite.resolve());
+    expect(result.current.activeNote).toEqual(edited);
+    act(() => snapshot([edited]));
+    expect(result.current.activeNote).toEqual(edited);
+    expect(result.current.syncState).toBe("synced");
   });
 
   it("receives remote edits, pins, daily metadata and deletes without a reload", async () => {
