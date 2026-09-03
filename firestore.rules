@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /notes/{noteId} {
+      function signedIn() { return request.auth != null; }
+      function ownsNote() { return signedIn() && resource.data.userId == request.auth.uid; }
+
+      // Imports may check a new document in a transaction before creating it.
+      allow get: if signedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow list: if ownsNote();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if ownsNote() && request.resource.data.userId == resource.data.userId;
+      allow delete: if ownsNote();
+    }
+  }
+}

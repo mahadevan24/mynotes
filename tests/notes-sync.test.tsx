@@ -1,0 +1,204 @@
+import { webcrypto } from "node:crypto";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { User } from "firebase/auth";
+import { NotesProvider, useNotes, type Note } from "@/context/NotesContext";
+
+type Snapshot = { docs: { id: string; data: () => Note }[]; metadata: { fromCache: boolean; hasPendingWrites: boolean } };
+const fake = vi.hoisted(() => ({
+  auth: undefined as unknown as (user: User | null) => void,
+  snapshots: [] as ((snapshot: Snapshot) => void)[],
+  errors: [] as ((error: Error) => void)[],
+  unsubscribe: vi.fn(), setDoc: vi.fn(), updateDoc: vi.fn(), deleteDoc: vi.fn(),
+  signOut: vi.fn(), query: vi.fn(), transaction: vi.fn(),
+  nextId: 0,
+}));
+vi.mock("@/lib/firebase", () => ({ auth: {}, db: {} }));
+vi.mock("firebase/auth", () => ({
+  onAuthStateChanged: (_: unknown, callback: typeof fake.auth) => { fake.auth = callback; return vi.fn(); },
+  createUserWithEmailAndPassword: vi.fn(), signInWithEmailAndPassword: vi.fn(),
+  GoogleAuthProvider: vi.fn(), signInWithPopup: vi.fn(), signOut: fake.signOut,
+}));
+vi.mock("firebase/firestore", () => ({
+  collection: () => "notes", where: (...args: unknown[]) => args,
+  query: fake.query,
+  doc: (_: unknown, collection?: string, id?: string) => ({ id: id ?? `cloud-${++fake.nextId}` }),
+  onSnapshot: (_: unknown, options: unknown, callback: (snapshot: Snapshot) => void, error: (error: Error) => void) => {
+    fake.snapshots.push(callback); fake.errors.push(error); return fake.unsubscribe;
+  },
+  setDoc: fake.setDoc, updateDoc: fake.updateDoc, deleteDoc: fake.deleteDoc,
+  runTransaction: fake.transaction,
+}));
+
+const user = (uid: string) => ({ uid, email: `${uid}@example.com` }) as User;
+const note = (id: string, content = "original"): Note => ({
+  id, title: "A note", content, tags: [], is_pinned: false, is_daily_note: false,
+  created_at: "2026-09-03T00:00:00Z", updated_at: "2026-09-03T00:00:00Z",
+});
+function snapshot(notes: Note[], fromCache = false, hasPendingWrites = false, index = fake.snapshots.length - 1) {
+  fake.snapshots[index]({ docs: notes.map(item => ({ id: item.id, data: () => item })), metadata: { fromCache, hasPendingWrites } });
+}
+function mount(uid: string | null = "alice") {
+  const hook = renderHook(useNotes, { wrapper: NotesProvider });
+  act(() => fake.auth(uid ? user(uid) : null));
+  return hook;
+}
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks(); fake.snapshots = []; fake.errors = []; fake.nextId = 0;
+  localStorage.clear();
+  Object.defineProperty(globalThis, "crypto", { configurable: true, value: webcrypto });
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  fake.setDoc.mockImplementation(() => new Promise(() => {}));
+  fake.updateDoc.mockImplementation(() => new Promise(() => {}));
+  fake.deleteDoc.mockImplementation(() => new Promise(() => {}));
+});
+afterEach(cleanup);
+
+describe("Firebase note synchronization", () => {
+  it("uses the final cloud ID immediately and keeps rapid creates and edits", async () => {
+    const { result } = mount();
+    act(() => snapshot([]));
+    let created!: Note;
+    await act(async () => {
+      created = await result.current.createNote();
+      await result.current.updateNote(created.id, { content: "typed immediately" });
+      await result.current.createNote({ title: "Second" });
+    });
+    expect(created.id).toBe("cloud-1");
+    expect(result.current.notes).toHaveLength(2);
+    expect(result.current.notes.find(n => n.id === created.id)?.content).toBe("typed immediately");
+    expect(fake.setDoc.mock.calls[1][0].id).toBe(created.id);
+    expect(fake.setDoc.mock.calls[1][1].content).toBe("typed immediately");
+    expect(localStorage.getItem("mynotes-data")).toBeNull();
+    expect(result.current.syncState).toBe("syncing");
+  });
+
+  it("receives remote edits, pins, daily metadata and deletes without a reload", async () => {
+    const { result } = mount();
+    act(() => { snapshot([note("one")]); result.current.setActiveNote(note("one")); });
+    act(() => snapshot([{ ...note("one", "from another device"), is_pinned: true, is_daily_note: true, daily_date: "2026-09-03", tags: ["work"] }]));
+    expect(result.current.activeNote?.content).toBe("from another device");
+    expect(result.current.activeNote?.is_pinned).toBe(true);
+    expect(result.current.activeNote?.daily_date).toBe("2026-09-03");
+    expect(result.current.syncState).toBe("synced");
+    act(() => snapshot([]));
+    expect(result.current.activeNote).toBeNull();
+  });
+
+  it("does not report cached or pending data as synced", () => {
+    const { result } = mount();
+    act(() => snapshot([], true));
+    expect(result.current.syncState).toBe("syncing");
+    act(() => snapshot([note("one")], false, true));
+    expect(result.current.syncState).toBe("syncing");
+    act(() => snapshot([note("one")]));
+    expect(result.current.syncState).toBe("synced");
+    Object.defineProperty(navigator, "onLine", { value: false });
+    act(() => window.dispatchEvent(new Event("offline")));
+    expect(result.current.syncState).toBe("offline");
+  });
+
+  it("keeps failed edits, shows the error, and retries without exposing them as guest notes", async () => {
+    const failure = deferred(); fake.updateDoc.mockReturnValueOnce(failure.promise);
+    const { result } = mount();
+    act(() => snapshot([note("one")]));
+    await act(() => result.current.updateNote("one", { content: "unsaved edit", is_daily_note: true, daily_date: "2026-09-04" }));
+    await act(async () => failure.reject(new Error("permission-denied")));
+    act(() => snapshot([note("one")]));
+    expect(result.current.notes[0].content).toBe("unsaved edit");
+    expect(result.current.syncState).toBe("error");
+    expect(result.current.syncError).toContain("permission-denied");
+    expect(localStorage.getItem("mynotes-recovery:alice")).toContain("unsaved edit");
+    act(() => result.current.retrySync());
+    expect(fake.updateDoc).toHaveBeenCalledTimes(2);
+    expect(fake.updateDoc.mock.calls[1][1]).toMatchObject({ content: "unsaved edit", daily_date: "2026-09-04" });
+    expect(localStorage.getItem("mynotes-data")).toBeNull();
+  });
+
+  it("does not let a late write or listener from one account change another account", async () => {
+    const write = deferred(); fake.setDoc.mockReturnValueOnce(write.promise);
+    const { result } = mount();
+    act(() => snapshot([]));
+    await act(() => result.current.createNote({ content: "Alice private" }));
+    act(() => fake.auth(user("bob")));
+    expect(result.current.notes).toEqual([]);
+    act(() => snapshot([note("bob")]));
+    act(() => snapshot([note("alice", "private")], false, false, 0));
+    await act(async () => write.reject(new Error("late failure")));
+    expect(result.current.notes.map(n => n.id)).toEqual(["bob"]);
+    expect(result.current.syncState).toBe("synced");
+    expect(fake.unsubscribe).toHaveBeenCalled();
+    expect(fake.query.mock.calls.at(-1)?.[1]).toEqual(["userId", "==", "bob"]);
+  });
+
+  it("does not fall back to guest notes when cloud permissions fail", () => {
+    localStorage.setItem("mynotes-data", JSON.stringify([note("guest")]));
+    const { result } = mount();
+    act(() => fake.errors[0](new Error("permission-denied")));
+    expect(result.current.notes).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.syncState).toBe("error");
+  });
+
+  it("imports local notes once, preserves the backup, and never overwrites an imported cloud note", async () => {
+    localStorage.setItem("mynotes-data", JSON.stringify([note("legacy")]));
+    const stored = new Map<string, unknown>();
+    const transactionSet = vi.fn((ref: { id: string }, data: unknown) => stored.set(ref.id, data));
+    fake.transaction.mockImplementation(async (_db, callback) => callback({
+      get: async (ref: { id: string }) => ({ exists: () => stored.has(ref.id) }), set: transactionSet,
+    }));
+    const { result } = mount();
+    act(() => snapshot([]));
+    expect(result.current.localNotesCount).toBe(1);
+    await act(() => result.current.importLocalNotes());
+    expect(result.current.localNotesCount).toBe(0);
+    expect(transactionSet).toHaveBeenCalledTimes(1);
+    expect(transactionSet.mock.calls[0][1]).toMatchObject({ userId: "alice", content: "original", daily_date: null });
+    expect(localStorage.getItem("mynotes-data")).toContain("legacy");
+    localStorage.removeItem("mynotes-imported:alice");
+    await act(() => result.current.importLocalNotes());
+    expect(transactionSet).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves local notes when an import fails", async () => {
+    localStorage.setItem("mynotes-data", JSON.stringify([note("legacy")]));
+    fake.transaction.mockRejectedValueOnce(new Error("permission-denied"));
+    const { result } = mount();
+    act(() => snapshot([]));
+    await act(() => result.current.importLocalNotes());
+    expect(result.current.localNotesCount).toBe(1);
+    expect(result.current.syncState).toBe("error");
+    expect(result.current.importing).toBe(false);
+    expect(localStorage.getItem("mynotes-imported:alice")).toBeNull();
+    expect(localStorage.getItem("mynotes-data")).toContain("legacy");
+    act(() => snapshot([]));
+    expect(result.current.syncState).toBe("error");
+    expect(result.current.syncError).toContain("upload failed");
+  });
+
+  it("does not erase an unreadable legacy backup when retrying local storage", async () => {
+    localStorage.setItem("mynotes-data", "broken backup");
+    const { result } = mount(null);
+    expect(result.current.syncState).toBe("error");
+    act(() => result.current.retrySync());
+    await act(() => result.current.createNote());
+    expect(localStorage.getItem("mynotes-data")).toBe("broken backup");
+    expect(result.current.syncState).toBe("error");
+  });
+
+  it("prevents sign out while a write is pending", async () => {
+    const { result } = mount();
+    act(() => snapshot([]));
+    await act(() => result.current.createNote());
+    await act(() => result.current.signOut());
+    expect(fake.signOut).not.toHaveBeenCalled();
+    expect(result.current.syncError).toContain("finish syncing");
+  });
+});

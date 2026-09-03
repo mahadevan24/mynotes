@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Editor } from "@/components/Editor";
 import { RightPanel } from "@/components/RightPanel";
 import { AuthOverlay } from "@/components/AuthOverlay";
+import { SyncStatus } from "@/components/SyncStatus";
 import { 
   Loader2, 
   Search, 
@@ -350,6 +351,7 @@ function WorkspaceContent() {
 
       {/* 2. Middle Editor or consolidated dashboard */}
       <main className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
+        <SyncStatus onSignIn={() => setAuthOpen(true)} />
         <Editor />
       </main>
 

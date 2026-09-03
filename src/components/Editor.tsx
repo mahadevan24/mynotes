@@ -490,13 +490,17 @@ export const Editor: React.FC = () => {
           {syncState === "synced" ? (
             <>
               <CloudLightning className="h-3.5 w-3.5 text-purple-400" />
-              <span className="text-purple-400/80">Cloud secure</span>
+              <span className="text-purple-400/80">Saved to Firebase</span>
             </>
           ) : syncState === "syncing" ? (
             <>
               <div className="h-3 w-3 rounded-full border border-t-transparent border-zinc-400 animate-spin" />
-              <span>Saving draft...</span>
+              <span>Syncing...</span>
             </>
+          ) : syncState === "error" ? (
+            <span className="text-rose-400" role="alert">Save failed · See sync status above</span>
+          ) : syncState === "offline" ? (
+            <span className="text-amber-400">Offline · Waiting to sync</span>
           ) : (
             <>
               <span className="h-1 w-1 rounded-full bg-amber-500" />

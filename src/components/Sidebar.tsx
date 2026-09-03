@@ -377,7 +377,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {user ? user.email : "Guest Mode"}
                 </span>
                 <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">
-                  {syncState === "synced" ? "Cloud Backup Active" : "Local Database Only"}
+                  {{ synced: "Saved to Firebase", syncing: "Syncing…", offline: "Offline · Sync pending", error: "Sync failed", local: "This device only" }[syncState]}
                 </span>
               </div>
             </div>

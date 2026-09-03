@@ -1,59 +1,50 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { db, auth, isFirebaseConfigured } from "@/lib/firebase";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { auth, db } from "@/lib/firebase";
 import {
-  User as FirebaseUser,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
+  type User, onAuthStateChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup,
   signOut as firebaseSignOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
 } from "firebase/auth";
 import {
-  collection,
-  doc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
+  collection, doc, onSnapshot, query, where, setDoc, updateDoc, deleteDoc,
+  runTransaction, type DocumentData,
 } from "firebase/firestore";
 
 export interface Note {
-  id: string; // Will represent Firestore doc ID or local ID
+  id: string;
   title: string;
   content: string;
   is_pinned: boolean;
   is_daily_note: boolean;
-  daily_date?: string; // yyyy-mm-dd
+  daily_date?: string;
   created_at: string;
   updated_at: string;
   tags: string[];
 }
 
-
-
-interface Backlink {
-  noteId: string;
-  noteTitle: string;
-}
+type SyncState = "local" | "syncing" | "synced" | "offline" | "error";
+type AuthResult = Promise<{ user?: User; error?: Error }>;
+type Mutation = { note: Note; kind: "create" | "update" | "delete"; patch?: Partial<Note>; failed?: boolean };
 
 interface NotesContextType {
   notes: Note[];
   activeNote: Note | null;
   setActiveNote: (note: Note | null) => void;
   loading: boolean;
-  user: FirebaseUser | null;
-  syncState: "local" | "syncing" | "synced" | "error";
-
+  user: User | null;
+  syncState: SyncState;
+  syncError: string | null;
+  localNotesCount: number;
+  importing: boolean;
+  importLocalNotes: () => Promise<void>;
+  retrySync: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   activeTab: "all" | "daily";
   setActiveTab: (tab: "all" | "daily") => void;
-  selectedDate: string; // yyyy-mm-dd
+  selectedDate: string;
   setSelectedDate: (date: string) => void;
   isFocusMode: boolean;
   toggleFocusMode: () => void;
@@ -61,469 +52,401 @@ interface NotesContextType {
   setLeftSidebarCollapsed: (collapsed: boolean) => void;
   rightSidebarCollapsed: boolean;
   setRightSidebarCollapsed: (collapsed: boolean) => void;
-  
-
-  
-  // Command Palette
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
-
-  // Auth Operations
-  signUp: (email: string, password: string) => Promise<{ user?: FirebaseUser; error?: any }>;
-  signIn: (email: string, password: string) => Promise<{ user?: FirebaseUser; error?: any }>;
-  signInWithGoogle: () => Promise<{ user?: FirebaseUser; error?: any }>;
+  signUp: (email: string, password: string) => AuthResult;
+  signIn: (email: string, password: string) => AuthResult;
+  signInWithGoogle: () => AuthResult;
   signOut: () => Promise<void>;
-  
-  // Note Operations
   createNote: (options?: Partial<Note>) => Promise<Note>;
-  updateNote: (noteId: string, updates: Partial<Note>) => Promise<void>;
-  deleteNote: (noteId: string) => Promise<void>;
-  togglePin: (noteId: string) => Promise<void>;
+  updateNote: (id: string, updates: Partial<Note>) => Promise<void>;
+  deleteNote: (id: string) => Promise<void>;
+  togglePin: (id: string) => Promise<void>;
   findOrCreateNoteByTitle: (title: string) => Promise<Note>;
-  
-  // Computed Properties
-  backlinks: Backlink[];
+  backlinks: { noteId: string; noteTitle: string }[];
 }
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
-
-export const useNotes = () => {
+export function useNotes() {
   const context = useContext(NotesContext);
-  if (!context) {
-    throw new Error("useNotes must be used within a NotesProvider");
-  }
+  if (!context) throw new Error("useNotes must be used within a NotesProvider");
   return context;
-};
+}
 
-export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function decodeNote(id: string, data: DocumentData): Note {
+  return {
+    id, title: data.title ?? "Untitled Note", content: data.content ?? "",
+    is_pinned: data.is_pinned ?? false, is_daily_note: data.is_daily_note ?? false,
+    daily_date: data.daily_date ?? undefined, tags: data.tags ?? [],
+    created_at: data.created_at ?? new Date(0).toISOString(),
+    updated_at: data.updated_at ?? new Date(0).toISOString(),
+  };
+}
+
+function encodeNote(note: Note, uid: string) {
+  return {
+    userId: uid, title: note.title, content: note.content, tags: note.tags,
+    is_pinned: note.is_pinned, is_daily_note: note.is_daily_note,
+    daily_date: note.daily_date ?? null, created_at: note.created_at, updated_at: note.updated_at,
+  };
+}
+
+function readLocalNotes(): Note[] {
+  const raw = localStorage.getItem("mynotes-data");
+  if (!raw) return [];
+  const data: unknown = JSON.parse(raw);
+  if (!Array.isArray(data) || data.some(note => !note || typeof note.id !== "string" || typeof note.content !== "string")) {
+    throw new Error("The local notes backup could not be read. It has been kept unchanged.");
+  }
+  return data.map(note => decodeNote(note.id, note));
+}
+
+export function NotesProvider({ children }: { children: React.ReactNode }) {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const notesRef = useRef<Note[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const [user, setUser] = useState<User | null>(null);
+  const userRef = useRef<User | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>("local");
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [localNotesCount, setLocalNotesCount] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const importingRef = useRef(false);
+  const [subscriptionVersion, setSubscriptionVersion] = useState(0);
+  const pending = useRef(new Map<string, Mutation>());
+  const remoteNotes = useRef<Note[]>([]);
+  const metadata = useRef({ fromCache: true, hasPendingWrites: false });
+  const listenerError = useRef<string | null>(null);
+  const importError = useRef<string | null>(null);
+  const localReadError = useRef<string | null>(null);
+  const session = useRef(0);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "daily">("all");
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  });
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [isFocusMode, setIsFocusMode] = useState(false);
-  const toggleFocusMode = () => setIsFocusMode((prev) => !prev);
-
-  const [leftSidebarCollapsed, setLeftSidebarCollapsedState] = useState(true);
-  const [rightSidebarCollapsed, setRightSidebarCollapsedState] = useState(false);
-
-  const setLeftSidebarCollapsed = (collapsed: boolean) => {
-    setLeftSidebarCollapsedState(collapsed);
-  };
-
-  const setRightSidebarCollapsed = (collapsed: boolean) => {
-    setRightSidebarCollapsedState(collapsed);
-  };
-
-  // Command palette state
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const activeNote = notes.find(note => note.id === activeId) ?? null;
 
-  const isClient = typeof window !== "undefined";
+  function publish(list: Note[]) {
+    notesRef.current = [...list].sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned) || b.updated_at.localeCompare(a.updated_at));
+    setNotes(notesRef.current);
+  }
 
-  // Check auth session on mount
-  useEffect(() => {
-    if (!isClient) return;
+  function refreshCloudView() {
+    const list = new Map(remoteNotes.current.map(note => [note.id, note]));
+    pending.current.forEach(({ note, kind, patch }) => {
+      if (kind === "delete") list.delete(note.id);
+      else if (kind === "update") list.set(note.id, { ...(list.get(note.id) ?? note), ...patch });
+      else list.set(note.id, note);
+    });
+    publish([...list.values()]);
+    const failed = [...pending.current.values()].some(mutation => mutation.failed);
+    if (listenerError.current || importError.current || localReadError.current || failed) setSyncState("error");
+    else if (!navigator.onLine) setSyncState("offline");
+    else if (metadata.current.fromCache || metadata.current.hasPendingWrites || pending.current.size || importingRef.current) setSyncState("syncing");
+    else {
+      setSyncState("synced");
+      setSyncError(null);
+    }
+  }
 
-
-
-    if (isFirebaseConfigured && auth) {
-      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        setUser(firebaseUser);
-        setSyncState(firebaseUser ? "synced" : "local");
-        loadNotes(firebaseUser);
+  function saveRecovery(uid: string, completedId?: string) {
+    try {
+      const key = `mynotes-recovery:${uid}`;
+      const saved: Mutation[] = JSON.parse(localStorage.getItem(key) ?? "[]");
+      const failed = new Map(saved.map(mutation => [mutation.note.id, mutation]));
+      if (completedId) failed.delete(completedId);
+      pending.current.forEach(mutation => {
+        if (mutation.failed) failed.set(mutation.note.id, mutation);
       });
-      return () => unsubscribe();
-    } else {
-      setSyncState("local");
-      loadNotes(null);
+      // An acknowledgement in this tab must not clear another tab's failed drafts.
+      localStorage.setItem(key, JSON.stringify([...failed.values()]));
+    } catch {
+      setSyncError("Save failed and a recovery copy could not be stored. Keep this tab open and retry.");
     }
-  }, []);
+  }
 
-
-
-  // Automatically switch tab when standard note is activated in daily tab
   useEffect(() => {
-    if (activeNote && !activeNote.is_daily_note && activeTab === "daily") {
-      setActiveTab("all");
-    }
-  }, [activeNote, activeTab]);
-
-
-
-  // Fetch notes from Firestore
-  const loadNotes = async (currentUser: FirebaseUser | null) => {
-    setLoading(true);
-    if (isFirebaseConfigured && db && currentUser) {
+    let unsubscribeNotes: (() => void) | undefined;
+    const changeUser = (currentUser: User | null) => {
+      const currentSession = ++session.current;
+      unsubscribeNotes?.();
+      pending.current.clear();
+      remoteNotes.current = [];
+      listenerError.current = null;
+      importError.current = null;
+      localReadError.current = null;
+      metadata.current = { fromCache: true, hasPendingWrites: false };
+      userRef.current = currentUser;
+      setUser(currentUser);
+      setSyncError(null);
+      publish([]);
+      setLoading(true);
+      setImporting(false);
+      importingRef.current = false;
       try {
-        setSyncState("syncing");
-        const notesRef = collection(db, "notes");
-        const q = query(notesRef, where("userId", "==", currentUser.uid));
-        const querySnapshot = await getDocs(q);
-
-        const list: Note[] = [];
-        querySnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          list.push({
-            id: docSnap.id,
-            title: data.title || "Untitled",
-            content: data.content || "",
-            is_pinned: data.is_pinned || false,
-            is_daily_note: data.is_daily_note || false,
-            daily_date: data.daily_date || undefined,
-            tags: data.tags || [],
-            created_at: data.created_at,
-            updated_at: data.updated_at,
-          });
-        });
-
-        // Sort: Pinned first, then updated_at descending
-        const sortedNotes = list.sort((a, b) => {
-          if (a.is_pinned !== b.is_pinned) {
-            return a.is_pinned ? -1 : 1;
-          }
-          return b.updated_at.localeCompare(a.updated_at);
-        });
-
-        setNotes(sortedNotes);
-
-        // Restore active selection
-        const savedActiveId = localStorage.getItem("mynotes-active-id");
-        if (savedActiveId) {
-          const match = sortedNotes.find((n) => n.id === savedActiveId);
-          if (match) setActiveNote(match);
+        setActiveId(localStorage.getItem(currentUser ? `mynotes-active-id:${currentUser.uid}` : "mynotes-active-id"));
+        const local = readLocalNotes();
+        const imported: string[] = currentUser ? JSON.parse(localStorage.getItem(`mynotes-imported:${currentUser.uid}`) ?? "[]") : [];
+        setLocalNotesCount(local.filter(note => !imported.includes(note.id)).length);
+        if (!currentUser || !db) {
+          publish(local);
+          setSyncState("local");
+          setLoading(false);
+          return;
         }
-
-        setSyncState("synced");
-      } catch (err) {
-        console.error("Error loading notes from Firestore:", err);
+        const recovery: Mutation[] = JSON.parse(localStorage.getItem(`mynotes-recovery:${currentUser.uid}`) ?? "[]");
+        recovery.forEach(mutation => pending.current.set(mutation.note.id, { ...mutation, failed: true }));
+        if (recovery.length) setSyncError("Some edits have not been saved to Firebase. Retry to upload them.");
+      } catch (error) {
+        localReadError.current = asError(error).message;
+        setSyncError(asError(error).message);
         setSyncState("error");
-        loadLocalNotes();
+        if (!currentUser) { setLoading(false); return; }
       }
-    } else {
-      loadLocalNotes();
-    }
-    setLoading(false);
-  };
-
-  const loadLocalNotes = () => {
-    if (!isClient) return;
-    const local = localStorage.getItem("mynotes-data");
-    if (local) {
-      try {
-        const parsed = JSON.parse(local) as Note[];
-        setNotes(parsed);
-        
-        const savedActiveId = localStorage.getItem("mynotes-active-id");
-        if (savedActiveId) {
-          const match = parsed.find((n) => n.id === savedActiveId);
-          if (match) setActiveNote(match);
-        }
-      } catch (e) {
-        console.error("Failed to parse local notes", e);
-      }
-    }
-    setSyncState("local");
-  };
-
-  const syncLocal = (updatedNotes: Note[]) => {
-    if (!isClient) return;
-    localStorage.setItem("mynotes-data", JSON.stringify(updatedNotes));
-  };
-
-  // Auth Operations
-  const signUp = async (email: string, password: string) => {
-    if (!isFirebaseConfigured || !auth) {
-      return { error: new Error("Firebase is not configured.") };
-    }
-    try {
+      if (!db || !currentUser) return;
       setSyncState("syncing");
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      setSyncState("synced");
-      return { user: res.user };
-    } catch (err: any) {
-      setSyncState("error");
-      return { error: err };
-    }
-  };
-
-  const signIn = async (email: string, password: string) => {
-    if (!isFirebaseConfigured || !auth) {
-      return { error: new Error("Firebase is not configured.") };
-    }
-    try {
-      setSyncState("syncing");
-      const res = await signInWithEmailAndPassword(auth, email, password);
-      setSyncState("synced");
-      return { user: res.user };
-    } catch (err: any) {
-      setSyncState("error");
-      return { error: err };
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    if (!isFirebaseConfigured || !auth) {
-      return { error: new Error("Firebase is not configured.") };
-    }
-    try {
-      setSyncState("syncing");
-      const provider = new GoogleAuthProvider();
-      const res = await signInWithPopup(auth, provider);
-      setSyncState("synced");
-      return { user: res.user };
-    } catch (err: any) {
-      setSyncState("error");
-      return { error: err };
-    }
-  };
-
-  const signOut = async () => {
-    if (isFirebaseConfigured && auth) {
-      await firebaseSignOut(auth);
-    }
-    setUser(null);
-    setActiveNote(null);
-    setNotes([]);
-    if (isClient) {
-      localStorage.removeItem("mynotes-active-id");
-      localStorage.removeItem("mynotes-data");
-    }
-    setSyncState("local");
-  };
-
-  // CRUD Operations
-  const createNote = async (options?: Partial<Note>) => {
-    const timestamp = new Date().toISOString();
-    const tempId = Math.random().toString(36).substring(2, 15);
-    const newNote: Note = {
-      id: tempId,
-      title: options?.is_daily_note
-        ? `Daily Note - ${options.daily_date}`
-        : "Untitled Note",
-      content: "",
-      is_pinned: false,
-      is_daily_note: false,
-      tags: [],
-      created_at: timestamp,
-      updated_at: timestamp,
-      ...options,
+      unsubscribeNotes = onSnapshot(
+        query(collection(db, "notes"), where("userId", "==", currentUser.uid)),
+        { includeMetadataChanges: true },
+        snapshot => {
+          if (session.current !== currentSession) return;
+          remoteNotes.current = snapshot.docs.map(snap => decodeNote(snap.id, snap.data()));
+          metadata.current = snapshot.metadata;
+          refreshCloudView();
+          setLoading(false);
+        },
+        error => {
+          if (session.current !== currentSession) return;
+          listenerError.current = error.message;
+          setSyncError(`Firebase sync failed: ${error.message}`);
+          setSyncState("error");
+          setLoading(false);
+        },
+      );
     };
+    const unsubscribeAuth = auth ? onAuthStateChanged(auth, changeUser, error => {
+      setSyncError(error.message);
+      setSyncState("error");
+      setLoading(false);
+    }) : undefined;
+    if (!auth) changeUser(null);
+    const updateConnection = () => { if (userRef.current) refreshCloudView(); };
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      // This is a session counter, not a DOM ref; invalidate all old callbacks.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      session.current++;
+      unsubscribeAuth?.();
+      unsubscribeNotes?.();
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
+    // Subscription callbacks use refs; retry explicitly replaces the listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscriptionVersion]);
 
-    const newNotesList = [newNote, ...notes];
-    setNotes(newNotesList);
-    setActiveNote(newNote);
-    if (isClient) {
-      localStorage.setItem("mynotes-active-id", newNote.id);
+  function setActiveNote(note: Note | null) {
+    setActiveId(note?.id ?? null);
+    try {
+      const key = userRef.current ? `mynotes-active-id:${userRef.current.uid}` : "mynotes-active-id";
+      if (note) localStorage.setItem(key, note.id);
+      else localStorage.removeItem(key);
+    } catch { /* Selection persistence is optional. */ }
+    if (note && !note.is_daily_note) setActiveTab("all");
+  }
+
+  async function authenticate(operation: () => Promise<{ user: User }>): AuthResult {
+    if (!auth) return { error: new Error("Firebase is not configured.") };
+    try { return { user: (await operation()).user }; }
+    catch (error) { return { error: asError(error) }; }
+  }
+
+  async function signOut() {
+    if (pending.current.size || importingRef.current || metadata.current.hasPendingWrites) {
+      setSyncError("Wait for your notes to finish syncing before signing out.");
+      return;
     }
-    syncLocal(newNotesList);
+    try { if (auth) await firebaseSignOut(auth); }
+    catch (error) { setSyncError(asError(error).message); }
+  }
 
-    if (isFirebaseConfigured && db && user) {
-      try {
-        setSyncState("syncing");
-        const docRef = doc(collection(db, "notes")); // Generates a unique document ID
-        await setDoc(docRef, {
-          userId: user.uid,
-          title: newNote.title,
-          content: newNote.content,
-          is_pinned: newNote.is_pinned,
-          is_daily_note: newNote.is_daily_note,
-          daily_date: newNote.daily_date || null,
-          tags: newNote.tags,
-          created_at: timestamp,
-          updated_at: timestamp,
-        });
-
-        // Swap the client temporary ID with Firestore ID
-        const updatedList = newNotesList.map((n) =>
-          n.id === tempId ? { ...n, id: docRef.id } : n
-        );
-        setNotes(updatedList);
-        if (activeNote?.id === tempId) {
-          setActiveNote({ ...newNote, id: docRef.id });
-        }
-        syncLocal(updatedList);
-        setSyncState("synced");
-      } catch (err) {
-        console.error("Error creating note on Firestore:", err);
-        setSyncState("error");
-      }
+  function persistLocal(list: Note[]) {
+    publish(list);
+    if (localReadError.current) {
+      setSyncState("error");
+      setSyncError(localReadError.current);
+      return;
     }
+    try {
+      localStorage.setItem("mynotes-data", JSON.stringify(list));
+      setLocalNotesCount(list.length);
+      setSyncState("local");
+      setSyncError(null);
+    } catch {
+      setSyncState("error");
+      setSyncError("This browser could not save your notes. Keep this tab open and retry.");
+    }
+  }
 
-    return newNote;
-  };
+  function writeMutation(mutation: Mutation) {
+    const currentUser = userRef.current;
+    if (!db || !currentUser) return;
+    const currentSession = session.current;
+    pending.current.set(mutation.note.id, mutation);
+    refreshCloudView();
+    const ref = doc(db, "notes", mutation.note.id);
+    const operation = mutation.kind === "delete" ? deleteDoc(ref)
+      : mutation.kind === "create" ? setDoc(ref, encodeNote(mutation.note, currentUser.uid))
+      : updateDoc(ref, mutation.patch!);
+    void operation.then(() => {
+      if (session.current !== currentSession || pending.current.get(mutation.note.id) !== mutation) return;
+      pending.current.delete(mutation.note.id);
+      saveRecovery(currentUser.uid, mutation.note.id);
+      refreshCloudView();
+    }).catch(error => {
+      if (session.current !== currentSession || pending.current.get(mutation.note.id) !== mutation) return;
+      mutation.failed = true;
+      saveRecovery(currentUser.uid);
+      setSyncError(`Not saved to Firebase: ${asError(error).message}`);
+      refreshCloudView();
+    });
+  }
 
-  const updateNote = async (noteId: string, updates: Partial<Note>) => {
+  async function createNote(options?: Partial<Note>): Promise<Note> {
     const timestamp = new Date().toISOString();
-    let updatedNote: Note | null = null;
-
-    const newNotesList = notes.map((note) => {
-      if (note.id === noteId) {
-        updatedNote = {
-          ...note,
-          ...updates,
-          updated_at: timestamp,
-        };
-        return updatedNote;
-      }
-      return note;
-    });
-
-    setNotes(newNotesList);
-    if (activeNote && activeNote.id === noteId) {
-      setActiveNote(updatedNote);
-    }
-    syncLocal(newNotesList);
-
-    if (isFirebaseConfigured && db && user && updatedNote) {
-      try {
-        setSyncState("syncing");
-        const docRef = doc(db, "notes", noteId);
-        const patchUpdates: any = { updated_at: timestamp };
-        if (updates.title !== undefined) patchUpdates.title = updates.title;
-        if (updates.content !== undefined) patchUpdates.content = updates.content;
-        if (updates.is_pinned !== undefined) patchUpdates.is_pinned = updates.is_pinned;
-        if (updates.tags !== undefined) patchUpdates.tags = updates.tags;
-
-        await updateDoc(docRef, patchUpdates);
-        setSyncState("synced");
-      } catch (err) {
-        console.error("Error updating note on Firestore:", err);
-        setSyncState("error");
-      }
-    }
-  };
-
-  const deleteNote = async (noteId: string) => {
-    const newNotesList = notes.filter((n) => n.id !== noteId);
-    setNotes(newNotesList);
-
-    if (activeNote && activeNote.id === noteId) {
-      const nextNote = newNotesList[0] || null;
-      setActiveNote(nextNote);
-      if (isClient) {
-        if (nextNote) {
-          localStorage.setItem("mynotes-active-id", nextNote.id);
-        } else {
-          localStorage.removeItem("mynotes-active-id");
-        }
-      }
-    }
-
-    syncLocal(newNotesList);
-
-    if (isFirebaseConfigured && db && user) {
-      try {
-        setSyncState("syncing");
-        await deleteDoc(doc(db, "notes", noteId));
-        setSyncState("synced");
-      } catch (err) {
-        console.error("Error deleting note on Firestore:", err);
-        setSyncState("error");
-      }
-    }
-  };
-
-  const togglePin = async (noteId: string) => {
-    const note = notes.find((n) => n.id === noteId);
-    if (note) {
-      await updateNote(noteId, { is_pinned: !note.is_pinned });
-    }
-  };
-
-  const findOrCreateNoteByTitle = async (title: string) => {
-    const formattedTitle = title.trim();
-    console.log("findOrCreateNoteByTitle called with:", formattedTitle);
-    console.log("Current list of notes:", notes.map(n => ({ id: n.id, title: n.title, is_daily_note: n.is_daily_note })));
-    const existing = notes.find((n) => n.title.toLowerCase() === formattedTitle.toLowerCase());
-    console.log("Existing note found:", existing);
-    if (existing) {
-      console.log("Setting active note to existing:", existing);
-      setActiveNote(existing);
-      if (isClient) {
-        localStorage.setItem("mynotes-active-id", existing.id);
-      }
-      return existing;
-    }
-    console.log("No existing note found. Creating new note with title:", formattedTitle);
-    const newNote = await createNote({
-      title: formattedTitle,
-      is_daily_note: false,
-    });
-    console.log("New note created:", newNote);
-    return newNote;
-  };
-
-  const handleSetActiveNote = (note: Note | null) => {
+    const note: Note = {
+      title: options?.is_daily_note ? `Daily Note - ${options.daily_date}` : "Untitled Note",
+      content: "", is_pinned: false, is_daily_note: false, tags: [], ...options,
+      // Allocate the final ID before the editor can issue its first update.
+      id: db && userRef.current ? doc(collection(db, "notes")).id : crypto.randomUUID(),
+      created_at: timestamp, updated_at: timestamp,
+    };
+    if (userRef.current && db) writeMutation({ note, kind: "create" });
+    else persistLocal([note, ...notesRef.current]);
     setActiveNote(note);
-    if (isClient) {
-      if (note) {
-        localStorage.setItem("mynotes-active-id", note.id);
-      } else {
-        localStorage.removeItem("mynotes-active-id");
+    return note;
+  }
+
+  async function updateNote(id: string, updates: Partial<Note>) {
+    const current = notesRef.current.find(note => note.id === id);
+    if (!current) return;
+    const patch: Partial<Note> = { updated_at: new Date().toISOString() };
+    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_date"] as const) {
+      if (updates[key] !== undefined) Object.assign(patch, { [key]: updates[key] });
+    }
+    const note = { ...current, ...patch };
+    if (userRef.current && db) {
+      const previous = pending.current.get(id);
+      writeMutation({ note, kind: previous?.kind === "create" ? "create" : "update", patch: { ...previous?.patch, ...patch } });
+    } else persistLocal(notesRef.current.map(item => item.id === id ? note : item));
+  }
+
+  async function deleteNote(id: string) {
+    const note = notesRef.current.find(item => item.id === id);
+    if (!note) return;
+    if (userRef.current && db) writeMutation({ note, kind: "delete" });
+    else persistLocal(notesRef.current.filter(item => item.id !== id));
+    if (activeId === id) setActiveNote(null);
+  }
+
+  function retrySync() {
+    if (!userRef.current) { persistLocal(notesRef.current); return; }
+    if (listenerError.current) {
+      pending.current.forEach(mutation => { mutation.failed = true; });
+      saveRecovery(userRef.current.uid);
+      setSubscriptionVersion(version => version + 1);
+      return;
+    }
+    if (importError.current) { void importLocalNotes(); return; }
+    setSyncError(null);
+    [...pending.current.values()].filter(mutation => mutation.failed).forEach(mutation => writeMutation({ ...mutation, failed: false }));
+    refreshCloudView();
+  }
+
+  async function importLocalNotes() {
+    const currentUser = userRef.current;
+    const firestore = db;
+    if (!currentUser || !firestore || importingRef.current) return;
+    const currentSession = session.current;
+    importingRef.current = true;
+    importError.current = null;
+    setImporting(true);
+    setSyncError(null);
+    refreshCloudView();
+    try {
+      const key = `mynotes-imported:${currentUser.uid}`;
+      const imported = new Set<string>(JSON.parse(localStorage.getItem(key) ?? "[]"));
+      const local = readLocalNotes();
+      for (const note of local) {
+        if (session.current !== currentSession) return;
+        if (imported.has(note.id)) continue;
+        const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${currentUser.uid}:${note.id}`));
+        const importId = `import_${Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("")}`;
+        const ref = doc(firestore, "notes", importId);
+        // Stable IDs and a transaction make retries safe without overwriting cloud edits.
+        await runTransaction(firestore, async transaction => {
+          const existing = await transaction.get(ref);
+          if (!existing.exists()) transaction.set(ref, encodeNote(note, currentUser.uid));
+        });
+        imported.add(note.id);
+        localStorage.setItem(key, JSON.stringify([...imported]));
+        if (session.current === currentSession) setLocalNotesCount(local.filter(item => !imported.has(item.id)).length);
+      }
+    } catch (error) {
+      if (session.current === currentSession) {
+        importError.current = `Local notes upload failed: ${asError(error).message}. The local backup is unchanged.`;
+        setSyncError(importError.current);
+        setSyncState("error");
+      }
+      return;
+    } finally {
+      if (session.current === currentSession) {
+        importingRef.current = false;
+        setImporting(false);
       }
     }
-  };
+    if (session.current === currentSession) refreshCloudView();
+  }
 
+  async function togglePin(id: string) {
+    const note = notesRef.current.find(item => item.id === id);
+    if (note) await updateNote(id, { is_pinned: !note.is_pinned });
+  }
 
+  async function findOrCreateNoteByTitle(title: string) {
+    const existing = notesRef.current.find(note => note.title.toLowerCase() === title.trim().toLowerCase());
+    if (existing) { setActiveNote(existing); return existing; }
+    return createNote({ title: title.trim(), is_daily_note: false });
+  }
 
-  const backlinks: Backlink[] = React.useMemo(() => {
+  const backlinks = React.useMemo(() => {
     if (!activeNote) return [];
-    const activeTitleEscaped = activeNote.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-    const linkRegex = new RegExp(`\\[\\[${activeTitleEscaped}\\]\\]`, "i");
-
-    return notes
-      .filter((n) => n.id !== activeNote.id)
-      .filter((n) => linkRegex.test(n.content))
-      .map((n) => ({
-        noteId: n.id,
-        noteTitle: n.title,
-      }));
+    const escaped = activeNote.title.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const pattern = new RegExp(`\\[\\[${escaped}\\]\\]`, "i");
+    return notes.filter(note => note.id !== activeNote.id && pattern.test(note.content))
+      .map(note => ({ noteId: note.id, noteTitle: note.title }));
   }, [notes, activeNote]);
 
-  return (
-    <NotesContext.Provider
-      value={{
-        notes,
-        activeNote,
-        setActiveNote: handleSetActiveNote,
-        loading,
-        user,
-        syncState,
-
-        searchQuery,
-        setSearchQuery,
-        activeTab,
-        setActiveTab,
-        selectedDate,
-        setSelectedDate,
-        isFocusMode,
-        toggleFocusMode,
-        leftSidebarCollapsed,
-        setLeftSidebarCollapsed,
-        rightSidebarCollapsed,
-        setRightSidebarCollapsed,
-        commandPaletteOpen,
-        setCommandPaletteOpen,
-        signUp,
-        signIn,
-        signInWithGoogle,
-        signOut,
-        createNote,
-        updateNote,
-        deleteNote,
-        togglePin,
-        findOrCreateNoteByTitle,
-        backlinks,
-      }}
-    >
-      {children}
-    </NotesContext.Provider>
-  );
-};
+  return <NotesContext.Provider value={{
+    notes, activeNote, setActiveNote, loading, user, syncState, syncError,
+    localNotesCount, importing, importLocalNotes, retrySync,
+    searchQuery, setSearchQuery, activeTab, setActiveTab, selectedDate, setSelectedDate,
+    isFocusMode, toggleFocusMode: () => setIsFocusMode(value => !value),
+    leftSidebarCollapsed, setLeftSidebarCollapsed, rightSidebarCollapsed, setRightSidebarCollapsed,
+    commandPaletteOpen, setCommandPaletteOpen,
+    signUp: (email, password) => authenticate(() => createUserWithEmailAndPassword(auth!, email, password)),
+    signIn: (email, password) => authenticate(() => signInWithEmailAndPassword(auth!, email, password)),
+    signInWithGoogle: () => authenticate(() => signInWithPopup(auth!, new GoogleAuthProvider())),
+    signOut, createNote, updateNote, deleteNote, togglePin, findOrCreateNoteByTitle, backlinks,
+  }}>{children}</NotesContext.Provider>;
+}

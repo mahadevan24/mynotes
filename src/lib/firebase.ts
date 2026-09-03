@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -19,11 +19,19 @@ export const isFirebaseConfigured = Boolean(
 );
 
 // Initialize Firebase App
+const alreadyInitialized = getApps().length > 0;
 const app = isFirebaseConfigured
   ? getApps().length === 0
     ? initializeApp(firebaseConfig)
     : getApp()
   : null;
 
-export const db = app ? getFirestore(app) : null;
+// Firestore persists pending writes across reloads and coordinates multiple tabs.
+export const db = app
+  ? typeof window !== "undefined" && !alreadyInitialized
+    ? initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      })
+    : getFirestore(app)
+  : null;
 export const auth = app ? getAuth(app) : null;
