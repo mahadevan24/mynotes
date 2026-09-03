@@ -138,17 +138,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <ChevronRight className="h-4.5 w-4.5" />
               </button>
-              {/* Logo */}
-              <div 
-                onClick={() => setCommandPaletteOpen(true)}
-                className={cn(
-                  "relative flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 border border-white/10 text-white font-mono text-xs font-extrabold shadow-md cursor-pointer transition-all hover:scale-105 active:scale-95 border-white/20 shadow-white/5"
-                )}
-                title="Command Center"
-              >
-                <span>mn</span>
-                <div className="absolute -inset-0.5 -z-10 rounded-lg opacity-25 blur-sm" />
-              </div>
             </>
           ) : (
             <>
