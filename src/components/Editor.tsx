@@ -22,7 +22,9 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkPreserveLines } from "@/lib/remark-preserve-lines";
 import { cn } from "@/lib/utils";
+import { MarkdownHelp } from "@/components/MarkdownHelp";
 
 export const Editor: React.FC = () => {
   const {
@@ -255,6 +257,7 @@ export const Editor: React.FC = () => {
 
         {/* Right: Quick actions */}
         <div className="flex items-center gap-2">
+          {editMode === "edit" && <MarkdownHelp key={activeNote.id} />}
           {rightSidebarCollapsed && (
             <button
               onClick={() => setRightSidebarCollapsed(false)}
@@ -414,12 +417,12 @@ export const Editor: React.FC = () => {
               </div>
             ) : (
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkPreserveLines]}
                 components={{
                   h1: ({ children }) => <h1 className="text-xl font-bold text-zinc-100 mt-5 mb-2.5 pb-1 border-b border-white/5">{children}</h1>,
                   h2: ({ children }) => <h2 className="text-base font-bold text-zinc-100 mt-4 mb-2">{children}</h2>,
                   h3: ({ children }) => <h3 className="text-sm font-bold text-zinc-100 mt-3.5 mb-1.5">{children}</h3>,
-                  p: ({ children }) => <p className="mb-3.5 text-zinc-400 leading-relaxed">{children}</p>,
+                  p: ({ children }) => <p className="m-0 text-zinc-400 leading-relaxed">{children}</p>,
                   ul: ({ children }) => <ul className="list-disc pl-5 mb-3.5 space-y-1">{children}</ul>,
                   ol: ({ children }) => <ol className="list-decimal pl-5 mb-3.5 space-y-1">{children}</ol>,
                   li: ({ children, checked, ...props }: any) => {
