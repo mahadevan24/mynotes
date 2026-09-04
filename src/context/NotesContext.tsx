@@ -18,6 +18,7 @@ export interface Note {
   content: string;
   is_pinned: boolean;
   is_daily_note: boolean;
+  daily_kind?: "journal" | "note";
   daily_date?: string;
   created_at: string;
   updated_at: string;
@@ -27,6 +28,14 @@ export interface Note {
 type SyncState = "local" | "syncing" | "synced" | "offline" | "error";
 type AuthResult = Promise<{ user?: User; error?: Error }>;
 type Mutation = { note: Note; kind: "create" | "update" | "delete"; patch?: Partial<Note>; failed?: boolean; acknowledged?: boolean };
+
+const DAILY_JOURNAL_TEMPLATE = [
+  "What am I grateful for?",
+  "Where am I winning?",
+  "What do I need / want to let go of?",
+  "What does my ideal day ahead look like?",
+  "How can I be of highest service / What do I want to be remembered for?",
+].map((question, index) => `**${index + 1}. ${question}**\n\n\n\n`).join("");
 
 interface NotesContextType {
   notes: Note[];
@@ -345,7 +354,8 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const timestamp = new Date().toISOString();
     const note: Note = {
       title: options?.is_daily_note ? `Daily Note - ${options.daily_date}` : "Untitled Note",
-      content: "", is_pinned: false, is_daily_note: false, tags: [], ...options,
+      is_pinned: false, is_daily_note: false, tags: [], ...options,
+      content: options?.content ?? (options?.is_daily_note && options.daily_kind !== "note" ? DAILY_JOURNAL_TEMPLATE : ""),
       // Allocate the final ID before the editor can issue its first update.
       id: db && userRef.current ? doc(collection(db, "notes")).id : crypto.randomUUID(),
       created_at: timestamp, updated_at: timestamp,
