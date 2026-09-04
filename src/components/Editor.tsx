@@ -295,7 +295,7 @@ export const Editor: React.FC = () => {
           {activeNote.is_daily_note ? (
             <div className="flex items-center gap-1 bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20 font-bold uppercase tracking-wider">
               <Calendar className="h-3 w-3" />
-              <span>Journal Log</span>
+              <span>{activeNote.daily_kind === "note" ? "Daily Note" : "Journal Log"}</span>
             </div>
           ) : (
             <div className="flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 font-bold uppercase tracking-wider">

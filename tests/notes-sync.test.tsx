@@ -1,6 +1,7 @@
 import { webcrypto } from "node:crypto";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Sidebar } from "@/components/Sidebar";
 import type { User } from "firebase/auth";
 import { NotesProvider, useNotes, type Note } from "@/context/NotesContext";
 
@@ -286,5 +287,39 @@ describe("Firebase note synchronization", () => {
     await act(() => result.current.signOut());
     expect(fake.signOut).not.toHaveBeenCalled();
     expect(result.current.syncError).toContain("finish syncing");
+  });
+});
+
+
+describe("daily sections", () => {
+  it("creates multiple journal entries and separate daily notes from the sidebar", async () => {
+    render(<NotesProvider><Sidebar onOpenAuth={() => {}} showProfilePopover={false} setShowProfilePopover={() => {}} /></NotesProvider>);
+    act(() => fake.auth(null));
+    fireEvent.click(screen.getByTitle("Expand Sidebar"));
+    fireEvent.click(screen.getByTitle("Daily Journal"));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "New entry" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "New entry" })); });
+    expect(screen.getAllByRole("heading")).toHaveLength(2);
+    fireEvent.click(screen.getByTitle("Daily Notes"));
+    expect(screen.queryAllByRole("heading")).toHaveLength(0);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "New note" })); });
+    expect(screen.getAllByRole("heading")).toHaveLength(1);
+    const saved = JSON.parse(localStorage.getItem("mynotes-data")!) as Note[];
+    expect(saved.filter(n => n.daily_kind === "journal")).toHaveLength(2);
+    expect(saved.filter(n => n.daily_kind === "note")).toHaveLength(1);
+    fireEvent.click(screen.getByTitle("Daily Journal"));
+    expect(screen.getAllByRole("heading")).toHaveLength(2);
+    fireEvent.click(screen.getByTitle("Collapse Sidebar"));
+    expect(screen.getByTitle("New journal entry")).toBeTruthy();
+  });
+
+  it("retains daily-note categories through Firebase snapshots", async () => {
+    const { result } = mount();
+    act(() => snapshot([{ ...note("legacy"), is_daily_note: true }, { ...note("daily-note"), is_daily_note: true, daily_kind: "note" }]));
+    expect(result.current.notes.find(n => n.id === "legacy")?.daily_kind).toBe("journal");
+    act(() => result.current.setActiveNote(result.current.notes.find(n => n.id === "daily-note")!));
+    expect(result.current.activeTab).toBe("daily-notes");
+    await act(() => result.current.createNote({ is_daily_note: true, daily_kind: "note", daily_date: "2026-09-05" }));
+    expect(fake.setDoc.mock.calls[0][1]).toMatchObject({ daily_kind: "note", daily_date: "2026-09-05" });
   });
 });

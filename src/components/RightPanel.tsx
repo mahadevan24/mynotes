@@ -20,6 +20,7 @@ export const RightPanel: React.FC = () => {
     selectedDate,
     setSelectedDate,
     setActiveTab,
+    activeTab,
     createNote,
     backlinks,
     setRightSidebarCollapsed,
@@ -64,17 +65,18 @@ export const RightPanel: React.FC = () => {
   const handleDayClick = async (dayNum: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
     setSelectedDate(dateStr);
-    setActiveTab("daily");
+    setActiveTab(activeTab === "daily-notes" ? "daily-notes" : "daily");
 
-    const match = notes.find((n) => n.is_daily_note && n.daily_date === dateStr);
+    const match = notes.find((n) => n.is_daily_note && (activeTab === "daily-notes" ? n.daily_kind === "note" : n.daily_kind !== "note") && n.daily_date === dateStr);
     if (match) {
       setActiveNote(match);
     } else {
       const dateObj = new Date(year, month, dayNum);
       const newDaily = await createNote({
         is_daily_note: true,
+        daily_kind: activeTab === "daily-notes" ? "note" : "journal",
         daily_date: dateStr,
-        title: `Daily Note — ${dateObj.toLocaleDateString("en-US", {
+        title: `${activeTab === "daily-notes" ? "Daily Note" : "Daily Journal"} — ${dateObj.toLocaleDateString("en-US", {
           weekday: "long",
           year: "numeric",
           month: "long",

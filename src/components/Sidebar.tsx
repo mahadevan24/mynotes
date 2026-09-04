@@ -5,6 +5,7 @@ import { useNotes, Note } from "@/context/NotesContext";
 import {
   Search,
   Calendar,
+  FileText,
   Layers,
   CheckSquare,
   Plus,
@@ -72,33 +73,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
       note.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (!matchesSearch) return false;
-    if (activeTab === "daily") return note.is_daily_note;
+    if (activeTab === "daily") return note.is_daily_note && note.daily_kind !== "note";
+    if (activeTab === "daily-notes") return note.is_daily_note && note.daily_kind === "note";
     return true; // 'all' tab shows both standard and daily notes
   });
 
   const pinnedNotes = filteredNotes.filter((n) => n.is_pinned);
   const regularNotes = filteredNotes.filter((n) => !n.is_pinned);
 
-  const handleDailyNotesClick = async () => {
-    setActiveTab("daily");
-    const todayStr = new Date().toISOString().split("T")[0];
-    const match = notes.find((n) => n.is_daily_note && n.daily_date === todayStr);
-
-    if (match) {
-      setActiveNote(match);
-    } else {
-      const newDaily = await createNote({
-        is_daily_note: true,
-        daily_date: todayStr,
-        title: `Daily Note — ${new Date().toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}`,
-      });
-      setActiveNote(newDaily);
-    }
+  const handleNewDaily = async () => {
+    const date = new Date();
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    setSearchQuery("");
+    const note = await createNote({
+      is_daily_note: true,
+      daily_kind: activeTab === "daily-notes" ? "note" : "journal",
+      daily_date: dateStr,
+      title: `${activeTab === "daily-notes" ? "Daily Note" : "Daily Journal"} — ${date.toLocaleDateString("en-US", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
+      })}`,
+    });
+    setActiveNote(note);
   };
 
   const handleNewNote = async () => {
@@ -223,7 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           <button
-            onClick={handleDailyNotesClick}
+            onClick={() => setActiveTab("daily")}
             className={cn(
               "flex items-center transition-all border border-transparent cursor-pointer justify-center rounded-lg",
               leftSidebarCollapsed 
@@ -240,22 +235,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <>
                 <span className="ml-2">Daily Journal</span>
                 <span className="ml-auto rounded bg-white/5 border border-white/10 px-1.5 py-0.2 text-[9px] text-zinc-500 font-mono">
-                  {notes.filter((n) => n.is_daily_note).length}
+                  {notes.filter((n) => n.is_daily_note && n.daily_kind !== "note").length}
                 </span>
               </>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab("daily-notes")}
+            className={cn(
+              "flex items-center transition-all border border-transparent cursor-pointer justify-center rounded-lg",
+              leftSidebarCollapsed ? "w-8 h-8 p-0" : "w-full justify-between px-2.5 py-2 text-xs font-semibold",
+              activeTab === "daily-notes" ? "bg-white/10 text-white border-white/20 shadow-sm" : "text-zinc-400 hover:bg-white/[0.02] hover:text-white"
+            )}
+            title="Daily Notes"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {!leftSidebarCollapsed && <>
+              <span className="ml-2">Daily Notes</span>
+              <span className="ml-auto rounded bg-white/5 border border-white/10 px-1.5 text-[9px] text-zinc-500 font-mono">
+                {notes.filter(n => n.is_daily_note && n.daily_kind === "note").length}
+              </span>
+            </>}
           </button>
         </nav>
 
         {/* Section Header or Quick Add Button */}
         {leftSidebarCollapsed ? (
-          activeTab !== "daily" && (
+          (
             <button
-              onClick={handleNewNote}
+              onClick={activeTab === "all" ? handleNewNote : handleNewDaily}
               className={cn(
                 "mt-4 flex h-8 w-8 items-center justify-center rounded-lg text-black shadow transition-all hover:scale-[1.03] active:scale-95 cursor-pointer shrink-0 bg-white hover:bg-zinc-200"
               )}
-              title="Create Note"
+              title={activeTab === "daily" ? "New journal entry" : activeTab === "daily-notes" ? "New daily note" : "Create Note"}
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -263,17 +275,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           <div className="mt-5 flex items-center justify-between border-t border-white/5 pt-3.5 w-full">
             <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-              {activeTab === "daily" ? "Journal Feed" : "Documents"}
+              {activeTab === "daily" ? "Journal Feed" : activeTab === "daily-notes" ? "Daily Notes" : "Documents"}
             </span>
-            {activeTab !== "daily" && (
+            {(
               <button
-                onClick={handleNewNote}
+                onClick={activeTab === "all" ? handleNewNote : handleNewDaily}
                 className={cn(
                   "flex items-center gap-0.5 rounded px-2 py-0.8 text-[10px] font-bold text-black shadow transition-all hover:scale-[1.03] active:scale-95 cursor-pointer bg-white hover:bg-zinc-200"
                 )}
               >
                 <Plus className="h-3 w-3" />
-                <span>Note</span>
+                <span>{activeTab === "daily" ? "New entry" : "New note"}</span>
               </button>
             )}
           </div>

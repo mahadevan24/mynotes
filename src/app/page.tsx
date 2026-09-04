@@ -73,32 +73,23 @@ function CommandPalette() {
           setActiveNote(note);
         }
       },
-      {
-        id: "action-new-journal",
-        title: "Create Daily Journal Entry",
-        subtitle: "Start writing today's log",
+      ...(["journal", "note"] as const).map(kind => ({
+        id: `action-new-daily-${kind}`,
+        title: kind === "journal" ? "Create Daily Journal Entry" : "Create Daily Note",
+        subtitle: kind === "journal" ? "Add a new journal entry for today" : "Add a new daily note for today",
         icon: <Calendar className="h-4 w-4 text-zinc-400" />,
         handler: async () => {
-          setActiveTab("daily");
-          const todayStr = new Date().toISOString().split("T")[0];
-          const match = notes.find((n) => n.is_daily_note && n.daily_date === todayStr);
-          if (match) {
-            setActiveNote(match);
-          } else {
-            const note = await createNote({
-              is_daily_note: true,
-              daily_date: todayStr,
-              title: `Daily Note — ${new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}`,
-            });
-            setActiveNote(note);
-          }
-        }
-      },
+          const date = new Date();
+          await createNote({
+            is_daily_note: true,
+            daily_kind: kind,
+            daily_date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+            title: `${kind === "journal" ? "Daily Journal" : "Daily Note"} — ${date.toLocaleDateString("en-US", {
+              weekday: "long", year: "numeric", month: "long", day: "numeric",
+            })}`,
+          });
+        },
+      })),
       {
         id: "action-toggle-focus",
         title: isFocusMode ? "Exit Zen Focus Mode" : "Enter Zen Focus Mode",
@@ -140,7 +131,7 @@ function CommandPalette() {
         subtitle: note.content ? note.content.slice(0, 60).replace(/[#*`_\[\]-]/g, "") : "Empty note content",
         icon: <FileText className="h-4 w-4 text-zinc-400" />,
         handler: () => {
-          setActiveTab(note.is_daily_note ? "daily" : "all");
+          setActiveTab(note.is_daily_note ? (note.daily_kind === "note" ? "daily-notes" : "daily") : "all");
           setActiveNote(note);
         }
       });

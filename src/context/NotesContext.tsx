@@ -51,8 +51,8 @@ interface NotesContextType {
   retrySync: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  activeTab: "all" | "daily";
-  setActiveTab: (tab: "all" | "daily") => void;
+  activeTab: "all" | "daily" | "daily-notes";
+  setActiveTab: (tab: "all" | "daily" | "daily-notes") => void;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   isFocusMode: boolean;
@@ -90,6 +90,7 @@ function decodeNote(id: string, data: DocumentData): Note {
   return {
     id, title: data.title ?? "Untitled Note", content: data.content ?? "",
     is_pinned: data.is_pinned ?? false, is_daily_note: data.is_daily_note ?? false,
+    daily_kind: data.daily_kind === "note" ? "note" : "journal",
     daily_date: data.daily_date ?? undefined, tags: data.tags ?? [],
     created_at: data.created_at ?? new Date(0).toISOString(),
     updated_at: data.updated_at ?? new Date(0).toISOString(),
@@ -100,6 +101,7 @@ function encodeNote(note: Note, uid: string) {
   return {
     userId: uid, title: note.title, content: note.content, tags: note.tags,
     is_pinned: note.is_pinned, is_daily_note: note.is_daily_note,
+    daily_kind: note.daily_kind ?? "journal",
     daily_date: note.daily_date ?? null, created_at: note.created_at, updated_at: note.updated_at,
   };
 }
@@ -136,7 +138,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   const session = useRef(0);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "daily">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "daily" | "daily-notes">("all");
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
@@ -278,7 +280,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
       if (note) localStorage.setItem(key, note.id);
       else localStorage.removeItem(key);
     } catch { /* Selection persistence is optional. */ }
-    if (note && !note.is_daily_note) setActiveTab("all");
+    if (note) setActiveTab(note.is_daily_note ? (note.daily_kind === "note" ? "daily-notes" : "daily") : "all");
   }
 
   async function authenticate(operation: () => Promise<{ user: User }>): AuthResult {
@@ -354,7 +356,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const timestamp = new Date().toISOString();
     const note: Note = {
       title: options?.is_daily_note ? `Daily Note - ${options.daily_date}` : "Untitled Note",
-      is_pinned: false, is_daily_note: false, tags: [], ...options,
+      is_pinned: false, is_daily_note: false, daily_kind: "journal", tags: [], ...options,
       content: options?.content ?? (options?.is_daily_note && options.daily_kind !== "note" ? DAILY_JOURNAL_TEMPLATE : ""),
       // Allocate the final ID before the editor can issue its first update.
       id: db && userRef.current ? doc(collection(db, "notes")).id : crypto.randomUUID(),
@@ -370,7 +372,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const current = notesRef.current.find(note => note.id === id);
     if (!current) return;
     const patch: Partial<Note> = { updated_at: new Date().toISOString() };
-    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_date"] as const) {
+    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_kind", "daily_date"] as const) {
       if (updates[key] !== undefined) Object.assign(patch, { [key]: updates[key] });
     }
     const note = { ...current, ...patch };
