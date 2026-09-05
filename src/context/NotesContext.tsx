@@ -21,6 +21,7 @@ export interface Note {
   daily_kind?: "journal" | "note" | "todo";
   daily_date?: string;
   is_completed?: boolean;
+  todo_order?: number;
   created_at: string;
   updated_at: string;
   tags: string[];
@@ -93,6 +94,7 @@ function decodeNote(id: string, data: DocumentData): Note {
     is_pinned: data.is_pinned ?? false, is_daily_note: data.is_daily_note ?? false,
     daily_kind: data.daily_kind === "todo" ? "todo" : data.daily_kind === "note" ? "note" : "journal",
     is_completed: data.is_completed === true,
+    todo_order: typeof data.todo_order === "number" ? data.todo_order : undefined,
     daily_date: data.daily_date ?? undefined, tags: data.tags ?? [],
     created_at: data.created_at ?? new Date(0).toISOString(),
     updated_at: data.updated_at ?? new Date(0).toISOString(),
@@ -105,6 +107,7 @@ function encodeNote(note: Note, uid: string) {
     is_pinned: note.is_pinned, is_daily_note: note.is_daily_note,
     daily_kind: note.daily_kind ?? "journal",
     is_completed: note.is_completed ?? false,
+    todo_order: note.todo_order ?? null,
     daily_date: note.daily_date ?? null, created_at: note.created_at, updated_at: note.updated_at,
   };
 }
@@ -377,7 +380,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const current = notesRef.current.find(note => note.id === id);
     if (!current) return;
     const patch: Partial<Note> = { updated_at: new Date().toISOString() };
-    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_kind", "daily_date", "is_completed"] as const) {
+    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_kind", "daily_date", "is_completed", "todo_order"] as const) {
       if (updates[key] !== undefined) Object.assign(patch, { [key]: updates[key] });
     }
     const note = { ...current, ...patch };
@@ -486,3 +489,4 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     signOut, createNote, updateNote, deleteNote, togglePin, findOrCreateNoteByTitle, backlinks,
   }}>{children}</NotesContext.Provider>;
 }
+
