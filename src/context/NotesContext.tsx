@@ -32,12 +32,53 @@ type AuthResult = Promise<{ user?: User; error?: Error }>;
 type Mutation = { note: Note; kind: "create" | "update" | "delete"; patch?: Partial<Note>; failed?: boolean; acknowledged?: boolean };
 
 const DAILY_JOURNAL_TEMPLATE = [
+  "What's on your mind?",
   "What am I grateful for?",
   "Where am I winning?",
   "What do I need / want to let go of?",
   "What does my ideal day ahead look like?",
   "How can I be of highest service / What do I want to be remembered for?",
-].map((question, index) => `**${index + 1}. ${question}**\n\n\n\n`).join("");
+].map((question) => `**${question}**\n\n\n`).join("") + [
+  {
+    title: "Ownership and impact",
+    questions: [
+      "What problem can I move closer to delivery today?",
+      "What is unclear, and whose input would help me clarify it?",
+      "What did I improve today, and what evidence shows the difference?",
+      "What recurring friction at IBM could I take ownership of?",
+      "What did I finish and deliver, rather than merely work on?",
+    ],
+  },
+  {
+    title: "Engineering judgment",
+    questions: [
+      "What trade-off did I make today, and why?",
+      "What could fail in what I’m building, and how will I catch it?",
+      "Did I address the underlying problem or only its symptoms?",
+      "What did I do to make this easier to test, operate, or maintain?",
+      "What decision or risk should I communicate before it becomes a surprise?",
+    ],
+  },
+  {
+    title: "Learning and interview readiness",
+    questions: [
+      "What can I now solve, build, or explain that I couldn’t yesterday?",
+      "What technical decision did I make or study today? What alternatives were available, and what are the trade-offs?",
+      "Where did I need help, and what would let me handle it independently next time?",
+      "What concrete example from today could support an interview story about ownership, debugging, or collaboration?",
+      "Which gap deserves focused practice tomorrow?",
+    ],
+  },
+  {
+    title: "Focus and sustainability",
+    questions: [
+      "Did my best attention go toward my most important problem?",
+      "What distracted me, and what change would make tomorrow easier?",
+      "What time will I stop tonight to protect sleep and tomorrow’s concentration?",
+      "What is the single most useful thing to finish tomorrow?",
+    ],
+  },
+].map(({ title, questions }) => `## ${title}\n\n${questions.map(question => `**${question}**\n\n\n`).join("")}`).join("");
 
 interface NotesContextType {
   notes: Note[];
@@ -364,7 +405,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const note: Note = {
       title: options?.is_daily_note ? `Daily Note - ${options.daily_date}` : "Untitled Note",
       is_pinned: false, is_completed: false, is_daily_note: false, daily_kind: "journal", tags: [], ...options,
-      content: options?.content ?? (options?.is_daily_note && options.daily_kind !== "note" && options.daily_kind !== "todo" ? DAILY_JOURNAL_TEMPLATE : ""),
+      content: options?.content ?? (options?.daily_kind !== "todo" ? DAILY_JOURNAL_TEMPLATE : ""),
       // Allocate the final ID before the editor can issue its first update.
       id: db && userRef.current ? doc(collection(db, "notes")).id : crypto.randomUUID(),
       created_at: timestamp, updated_at: timestamp,
