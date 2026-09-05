@@ -25,6 +25,7 @@ import remarkGfm from "remark-gfm";
 import { remarkPreserveLines } from "@/lib/remark-preserve-lines";
 import { cn } from "@/lib/utils";
 import { MarkdownHelp } from "@/components/MarkdownHelp";
+import { JOURNAL_PROMPT_CATEGORIES } from "@/lib/journal-prompts";
 
 export const Editor: React.FC = () => {
   const {
@@ -50,6 +51,10 @@ export const Editor: React.FC = () => {
   const [linkQuery, setLinkQuery] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [showPromptSuggestions, setShowPromptSuggestions] = useState(false);
+  const [promptQuery, setPromptQuery] = useState("");
+  const [promptStart, setPromptStart] = useState(0);
+  const [selectedPromptIndex, setSelectedPromptIndex] = useState(0);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -60,6 +65,7 @@ export const Editor: React.FC = () => {
     setShowTagInput(false);
     setNewTag("");
     setShowLinkSuggestions(false);
+    setShowPromptSuggestions(false);
   }, [activeNote?.id]);
 
   if (!activeNote || activeNote.daily_kind === "todo") {
@@ -102,6 +108,23 @@ export const Editor: React.FC = () => {
     setCursorPosition(pos);
     updateNote(activeNote.id, { content: val });
 
+    if (activeNote.is_daily_note && activeNote.daily_kind !== "note") {
+      const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+      const currentLine = val.slice(lineStart, pos);
+      const slashMatch = currentLine.match(/^\s*\/(.*)$/);
+
+      if (slashMatch) {
+        setPromptStart(lineStart + currentLine.indexOf("/"));
+        setPromptQuery(slashMatch[1]);
+        setShowPromptSuggestions(true);
+        setShowLinkSuggestions(false);
+        setSelectedPromptIndex(0);
+        return;
+      }
+    }
+
+    setShowPromptSuggestions(false);
+
     // Check for "[[ " pattern trigger
     const textBeforeCursor = val.substring(0, pos);
     const doubleBracketIndex = textBeforeCursor.lastIndexOf("[[");
@@ -121,6 +144,25 @@ export const Editor: React.FC = () => {
 
   // Autocomplete key triggers
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showPromptSuggestions) {
+      const prompts = getFilteredPromptCategories().flatMap((category) => category.prompts);
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedPromptIndex((prev) => prev < prompts.length - 1 ? prev + 1 : 0);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedPromptIndex((prev) => prev > 0 ? prev - 1 : prompts.length - 1);
+      } else if ((e.key === "Enter" || e.key === "Tab") && prompts[selectedPromptIndex]) {
+        e.preventDefault();
+        insertJournalPrompt(prompts[selectedPromptIndex]);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setShowPromptSuggestions(false);
+      }
+      return;
+    }
+
     if (showLinkSuggestions) {
       const filteredSuggestions = getFilteredSuggestions();
       
@@ -144,6 +186,33 @@ export const Editor: React.FC = () => {
         setShowLinkSuggestions(false);
       }
     }
+  };
+
+  const getFilteredPromptCategories = () => {
+    const query = promptQuery.trim().toLowerCase();
+    if (!query) return JOURNAL_PROMPT_CATEGORIES;
+
+    return JOURNAL_PROMPT_CATEGORIES.map((category) => ({
+      ...category,
+      prompts: category.prompts.filter((prompt) =>
+        prompt.toLowerCase().includes(query) || category.title.toLowerCase().includes(query)
+      ),
+    })).filter((category) => category.prompts.length > 0);
+  };
+
+  const insertJournalPrompt = (prompt: string) => {
+    const before = activeNote.content.slice(0, promptStart);
+    const after = activeNote.content.slice(cursorPosition);
+    const insertedText = `**${prompt}**\n\n`;
+    const newContent = before + insertedText + after;
+    const newCursorPosition = before.length + insertedText.length;
+
+    updateNote(activeNote.id, { content: newContent });
+    setShowPromptSuggestions(false);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(newCursorPosition, newCursorPosition);
+    }, 0);
   };
 
   const getFilteredSuggestions = () => {
@@ -369,9 +438,63 @@ export const Editor: React.FC = () => {
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder="Write in markdown (e.g., # header, - [ ] checkbox task, or [[Note Link]] wiki connectors)..."
+              placeholder={activeNote.is_daily_note && activeNote.daily_kind !== "note"
+                ? "Type / to choose a journal question, then write your answer..."
+                : "Write in markdown (e.g., # header, - [ ] checkbox task, or [[Note Link]] wiki connectors)..."}
               className="w-full flex-1 resize-none bg-transparent text-sm text-zinc-300 placeholder-zinc-800 outline-none font-sans leading-relaxed min-h-[250px] custom-scrollbar focus:ring-0"
             />
+
+            {showPromptSuggestions && (
+              <div
+                className="absolute left-2 top-10 z-30 flex max-h-80 w-[min(28rem,calc(100%-1rem))] flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-950 shadow-2xl backdrop-blur-xl"
+                role="listbox"
+                aria-label="Journal questions"
+              >
+                <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                  <span>Choose a journal question</span>
+                  {promptQuery && <span className="ml-auto normal-case tracking-normal text-zinc-600">/{promptQuery}</span>}
+                </div>
+                <div className="custom-scrollbar overflow-y-auto p-1.5">
+                  {getFilteredPromptCategories().length === 0 ? (
+                    <p className="px-3 py-5 text-center text-xs text-zinc-600">No matching questions</p>
+                  ) : (() => {
+                    let flatIndex = 0;
+                    return getFilteredPromptCategories().map((category) => (
+                      <div key={category.title} className="mb-1 last:mb-0">
+                        <div className="px-2 py-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-400/70">
+                          {category.title}
+                        </div>
+                        {category.prompts.map((prompt) => {
+                          const index = flatIndex++;
+                          return (
+                            <button
+                              key={prompt}
+                              type="button"
+                              role="option"
+                              aria-selected={index === selectedPromptIndex}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => insertJournalPrompt(prompt)}
+                              className={cn(
+                                "block w-full rounded-lg px-2.5 py-2 text-left text-[11px] leading-snug transition-colors",
+                                index === selectedPromptIndex
+                                  ? "bg-purple-600 text-white"
+                                  : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                              )}
+                            >
+                              {prompt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ));
+                  })()}
+                </div>
+                <div className="border-t border-white/5 px-3 py-1.5 text-[9px] text-zinc-600">
+                  ↑↓ navigate · Enter insert · Esc close
+                </div>
+              </div>
+            )}
 
             {/* Wiki Links suggestions overlay */}
             {showLinkSuggestions && getFilteredSuggestions().length > 0 && (

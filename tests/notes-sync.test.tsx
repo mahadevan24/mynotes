@@ -2,6 +2,7 @@ import { webcrypto } from "node:crypto";
 import { act, cleanup, renderHook, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "@/components/Sidebar";
+import { Editor } from "@/components/Editor";
 import type { User } from "firebase/auth";
 import { NotesProvider, useNotes, type Note } from "@/context/NotesContext";
 
@@ -292,6 +293,26 @@ describe("Firebase note synchronization", () => {
 
 
 describe("daily sections", () => {
+  it("opens categorized journal questions with slash and inserts the selected question", async () => {
+    const journal = { ...note("journal", ""), is_daily_note: true, daily_kind: "journal" as const, daily_date: "2026-09-05" };
+    localStorage.setItem("mynotes-data", JSON.stringify([journal]));
+    localStorage.setItem("mynotes-active-id", journal.id);
+
+    render(<NotesProvider><Editor /></NotesProvider>);
+    act(() => fake.auth(null));
+    fireEvent.click(screen.getByRole("button", { name: "Write" }));
+    const editor = screen.getByPlaceholderText("Type / to choose a journal question, then write your answer...");
+
+    fireEvent.change(editor, { target: { value: "/", selectionStart: 1 } });
+    expect(screen.getByRole("listbox", { name: "Journal questions" })).toBeTruthy();
+    expect(screen.getByText("Daily reflection")).toBeTruthy();
+    expect(screen.getByText("Engineering judgment")).toBeTruthy();
+
+    fireEvent.keyDown(editor, { key: "ArrowDown" });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect((editor as HTMLTextAreaElement).value).toBe("**What am I grateful for?**\n\n");
+  });
+
   it("creates multiple journal entries and separate daily notes from the sidebar", async () => {
     render(<NotesProvider><Sidebar onOpenAuth={() => {}} showProfilePopover={false} setShowProfilePopover={() => {}} /></NotesProvider>);
     act(() => fake.auth(null));
@@ -307,6 +328,7 @@ describe("daily sections", () => {
     const saved = JSON.parse(localStorage.getItem("mynotes-data")!) as Note[];
     expect(saved.filter(n => n.daily_kind === "journal")).toHaveLength(2);
     expect(saved.filter(n => n.daily_kind === "note")).toHaveLength(1);
+    expect(saved.every(n => n.content === "")).toBe(true);
     fireEvent.click(screen.getByTitle("Daily Journal"));
     expect(screen.getAllByRole("heading")).toHaveLength(2);
     fireEvent.click(screen.getByTitle("Collapse Sidebar"));
