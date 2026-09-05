@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { useNotes, Note } from "@/context/NotesContext";
+import { useNotes } from "@/context/NotesContext";
 import {
   Calendar as CalendarIcon,
   Link as LinkIcon,
   ChevronLeft,
   ChevronRight,
   Info,
-  Sparkles
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,9 +19,6 @@ export const RightPanel: React.FC = () => {
     setActiveNote,
     selectedDate,
     setSelectedDate,
-    setActiveTab,
-    activeTab,
-    createNote,
     backlinks,
     setRightSidebarCollapsed,
   } = useNotes();
@@ -51,43 +48,25 @@ export const RightPanel: React.FC = () => {
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
+  const localDateKey = (value: string) => {
+    const date = new Date(value);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
+  const notesOnDate = notes
+    .filter((note) => localDateKey(note.created_at) === selectedDate)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const selectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", {
+    month: "long", day: "numeric", year: "numeric",
+  });
+
   const dayHasNotes = (dayNum: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    return notes.some((note) => {
-      if (note.is_daily_note && note.daily_date === dateStr) {
-        return true;
-      }
-      const noteDate = note.created_at.split("T")[0];
-      return noteDate === dateStr;
-    });
+    return notes.some((note) => localDateKey(note.created_at) === dateStr);
   };
 
-  const handleDayClick = async (dayNum: number) => {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    setSelectedDate(dateStr);
-    setActiveTab(activeTab === "daily-notes" ? "daily-notes" : "daily");
-
-    const match = notes.find((n) => n.is_daily_note && (activeTab === "daily-notes" ? n.daily_kind === "note" : n.daily_kind !== "note") && n.daily_date === dateStr);
-    if (match) {
-      setActiveNote(match);
-    } else {
-      const dateObj = new Date(year, month, dayNum);
-      const newDaily = await createNote({
-        is_daily_note: true,
-        daily_kind: activeTab === "daily-notes" ? "note" : "journal",
-        daily_date: dateStr,
-        title: `${activeTab === "daily-notes" ? "Daily Note" : "Daily Journal"} — ${dateObj.toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}`,
-      });
-      setActiveNote(newDaily);
-    }
+  const handleDayClick = (dayNum: number) => {
+    setSelectedDate(`${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`);
   };
-
-
 
   const handleBacklinkClick = (linkedNoteId: string) => {
     const match = notes.find((n) => n.id === linkedNoteId);
@@ -119,12 +98,14 @@ export const RightPanel: React.FC = () => {
           </div>
           <div className="flex items-center gap-0.5">
             <button
+              aria-label="Previous month"
               onClick={handlePrevMonth}
               className="rounded p-0.8 text-zinc-600 hover:bg-white/5 hover:text-white transition-all cursor-pointer"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
             <button
+              aria-label="Next month"
               onClick={handleNextMonth}
               className="rounded p-0.8 text-zinc-600 hover:bg-white/5 hover:text-white transition-all cursor-pointer"
             >
@@ -153,13 +134,15 @@ export const RightPanel: React.FC = () => {
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const dayNum = i + 1;
             const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-            const isToday = new Date().toISOString().split("T")[0] === dateStr;
+            const isToday = localDateKey(new Date().toISOString()) === dateStr;
             const isSelected = selectedDate === dateStr;
             const hasNotes = dayHasNotes(dayNum);
 
             return (
               <button
                 key={`day-${dayNum}`}
+                aria-label={`${monthNames[month]} ${dayNum}, ${year}`}
+                aria-pressed={isSelected}
                 onClick={() => handleDayClick(dayNum)}
                 className={cn(
                   "relative h-6 w-6 rounded-md text-[10px] font-bold flex flex-col items-center justify-center transition-all mx-auto cursor-pointer",
@@ -188,6 +171,35 @@ export const RightPanel: React.FC = () => {
           })}
         </div>
       </div>
+
+      <section aria-label="Notes added on selected date" className="mt-4 rounded-xl border border-white/5 bg-neutral-950/40 p-3.5 shadow-md shrink-0">
+        <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2.5">
+          <div className="min-w-0">
+            <h2 className="text-[10px] font-extrabold text-zinc-300 uppercase tracking-widest">Notes added</h2>
+            <p className="mt-1 text-[10px] text-zinc-500">{selectedDateLabel}</p>
+          </div>
+          <span className="rounded bg-white/5 border border-white/10 px-1.5 text-[9px] font-bold text-zinc-500 font-mono">{notesOnDate.length}</span>
+        </div>
+        <div className="max-h-60 overflow-y-auto space-y-1.5 custom-scrollbar">
+          {notesOnDate.length ? notesOnDate.map((note) => (
+            <button
+              key={note.id}
+              onClick={() => setActiveNote(note)}
+              aria-pressed={activeNote?.id === note.id}
+              className={cn(
+                "w-full flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-white",
+                activeNote?.id === note.id ? "border-white/20 bg-white/10 text-white" : "border-white/5 text-zinc-400 hover:bg-white/5 hover:text-white"
+              )}
+            >
+              <FileText className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate text-[11px] font-bold">{note.title.trim() || "Untitled Note"}</span>
+                <span className="block truncate mt-1 text-[10px] text-zinc-500">{note.content.trim() || "Empty note"}</span>
+              </span>
+            </button>
+          )) : <p className="py-5 text-center text-[10px] text-zinc-500">No notes added on this date.</p>}
+        </div>
+      </section>
 
       {/* SECTION 3: Backlinks Panel */}
       <div className="mt-4 flex flex-col rounded-xl border border-white/5 bg-neutral-950/40 p-3.5 shadow-md min-h-[120px] shrink-0">

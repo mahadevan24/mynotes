@@ -41,7 +41,6 @@ export const Editor: React.FC = () => {
   } = useNotes();
 
   const [editMode, setEditMode] = useState<"edit" | "preview">("preview");
-  const previousNoteId = useRef<string | null>(null);
   const [newTag, setNewTag] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -55,14 +54,9 @@ export const Editor: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Keep the restored startup note in preview; later selections open for editing.
+  // Open each selected note in preview mode.
   useEffect(() => {
-    if (activeNote?.id) {
-      if (previousNoteId.current && previousNoteId.current !== activeNote.id) {
-        setEditMode("edit");
-      }
-      previousNoteId.current = activeNote.id;
-    }
+    setEditMode("preview");
     setShowTagInput(false);
     setNewTag("");
     setShowLinkSuggestions(false);
