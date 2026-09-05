@@ -269,11 +269,6 @@ function CommandPalette() {
   );
 }
 
-function WorkspaceTab({ tab }: { tab: "all" | "daily-todos" }) {
-  const { activeTab, setActiveTab } = useNotes();
-  return <button onClick={() => setActiveTab(tab)} aria-pressed={tab === "all" ? activeTab !== "daily-todos" : activeTab === tab} className={cn("rounded-lg px-3 py-2 text-xs font-semibold transition-colors", (tab === "all" ? activeTab !== "daily-todos" : activeTab === tab) ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5")}>{tab === "all" ? "Notes" : "Daily ToDos"}</button>;
-}
-
 function WorkspaceContent() {
   const { 
     loading, 
@@ -347,9 +342,6 @@ function WorkspaceContent() {
 
       {/* 2. Middle Editor or consolidated dashboard */}
       <main className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
-        <div className="mb-2 flex gap-1 shrink-0" aria-label="Workspace sections">
-          {(["all", "daily-todos"] as const).map(tab => <WorkspaceTab key={tab} tab={tab} />)}
-        </div>
         {activeTab === "daily-todos" ? <DailyTodos /> : <Editor />}
       </main>
 
