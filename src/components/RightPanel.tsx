@@ -53,7 +53,7 @@ export const RightPanel: React.FC = () => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   };
   const notesOnDate = notes
-    .filter((note) => localDateKey(note.created_at) === selectedDate)
+    .filter((note) => note.daily_kind !== "todo" && localDateKey(note.created_at) === selectedDate)
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const selectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
@@ -61,7 +61,7 @@ export const RightPanel: React.FC = () => {
 
   const dayHasNotes = (dayNum: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    return notes.some((note) => localDateKey(note.created_at) === dateStr);
+    return notes.some((note) => note.daily_kind !== "todo" && localDateKey(note.created_at) === dateStr);
   };
 
   const handleDayClick = (dayNum: number) => {

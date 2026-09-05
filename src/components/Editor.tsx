@@ -62,7 +62,7 @@ export const Editor: React.FC = () => {
     setShowLinkSuggestions(false);
   }, [activeNote?.id]);
 
-  if (!activeNote) {
+  if (!activeNote || activeNote.daily_kind === "todo") {
     return (
       <div className="flex flex-1 flex-col items-center justify-center text-center p-8 bg-[#050505]/20 backdrop-blur-xl rounded-2xl border border-white/5 shadow-2xl h-full select-none">
         <div className="relative mb-6">

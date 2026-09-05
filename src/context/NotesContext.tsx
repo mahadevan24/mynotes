@@ -18,8 +18,9 @@ export interface Note {
   content: string;
   is_pinned: boolean;
   is_daily_note: boolean;
-  daily_kind?: "journal" | "note";
+  daily_kind?: "journal" | "note" | "todo";
   daily_date?: string;
+  is_completed?: boolean;
   created_at: string;
   updated_at: string;
   tags: string[];
@@ -51,8 +52,8 @@ interface NotesContextType {
   retrySync: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  activeTab: "all" | "daily" | "daily-notes";
-  setActiveTab: (tab: "all" | "daily" | "daily-notes") => void;
+  activeTab: "all" | "daily" | "daily-notes" | "daily-todos";
+  setActiveTab: (tab: "all" | "daily" | "daily-notes" | "daily-todos") => void;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   isFocusMode: boolean;
@@ -90,7 +91,8 @@ function decodeNote(id: string, data: DocumentData): Note {
   return {
     id, title: data.title ?? "Untitled Note", content: data.content ?? "",
     is_pinned: data.is_pinned ?? false, is_daily_note: data.is_daily_note ?? false,
-    daily_kind: data.daily_kind === "note" ? "note" : "journal",
+    daily_kind: data.daily_kind === "todo" ? "todo" : data.daily_kind === "note" ? "note" : "journal",
+    is_completed: data.is_completed === true,
     daily_date: data.daily_date ?? undefined, tags: data.tags ?? [],
     created_at: data.created_at ?? new Date(0).toISOString(),
     updated_at: data.updated_at ?? new Date(0).toISOString(),
@@ -102,6 +104,7 @@ function encodeNote(note: Note, uid: string) {
     userId: uid, title: note.title, content: note.content, tags: note.tags,
     is_pinned: note.is_pinned, is_daily_note: note.is_daily_note,
     daily_kind: note.daily_kind ?? "journal",
+    is_completed: note.is_completed ?? false,
     daily_date: note.daily_date ?? null, created_at: note.created_at, updated_at: note.updated_at,
   };
 }
@@ -138,8 +141,8 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   const session = useRef(0);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "daily" | "daily-notes">("all");
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [activeTab, setActiveTab] = useState<"all" | "daily" | "daily-notes" | "daily-todos">("all");
+  const [selectedDate, setSelectedDate] = useState(() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; });
   const [isFocusMode, setIsFocusMode] = useState(true);
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
@@ -280,7 +283,8 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
       if (note) localStorage.setItem(key, note.id);
       else localStorage.removeItem(key);
     } catch { /* Selection persistence is optional. */ }
-    if (note) setActiveTab(note.is_daily_note ? (note.daily_kind === "note" ? "daily-notes" : "daily") : "all");
+    if (note?.daily_kind === "todo" && note.daily_date) setSelectedDate(note.daily_date);
+    if (note) setActiveTab(note.is_daily_note ? (note.daily_kind === "todo" ? "daily-todos" : note.daily_kind === "note" ? "daily-notes" : "daily") : "all");
   }
 
   async function authenticate(operation: () => Promise<{ user: User }>): AuthResult {
@@ -356,15 +360,16 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const timestamp = new Date().toISOString();
     const note: Note = {
       title: options?.is_daily_note ? `Daily Note - ${options.daily_date}` : "Untitled Note",
-      is_pinned: false, is_daily_note: false, daily_kind: "journal", tags: [], ...options,
-      content: options?.content ?? (options?.is_daily_note && options.daily_kind !== "note" ? DAILY_JOURNAL_TEMPLATE : ""),
+      is_pinned: false, is_completed: false, is_daily_note: false, daily_kind: "journal", tags: [], ...options,
+      content: options?.content ?? (options?.is_daily_note && options.daily_kind !== "note" && options.daily_kind !== "todo" ? DAILY_JOURNAL_TEMPLATE : ""),
       // Allocate the final ID before the editor can issue its first update.
       id: db && userRef.current ? doc(collection(db, "notes")).id : crypto.randomUUID(),
       created_at: timestamp, updated_at: timestamp,
     };
     if (userRef.current && db) writeMutation({ note, kind: "create" });
     else persistLocal([note, ...notesRef.current]);
-    setActiveNote(note);
+    if (note.daily_kind === "todo") setActiveTab("daily-todos");
+    else setActiveNote(note);
     return note;
   }
 
@@ -372,7 +377,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     const current = notesRef.current.find(note => note.id === id);
     if (!current) return;
     const patch: Partial<Note> = { updated_at: new Date().toISOString() };
-    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_kind", "daily_date"] as const) {
+    for (const key of ["title", "content", "tags", "is_pinned", "is_daily_note", "daily_kind", "daily_date", "is_completed"] as const) {
       if (updates[key] !== undefined) Object.assign(patch, { [key]: updates[key] });
     }
     const note = { ...current, ...patch };
