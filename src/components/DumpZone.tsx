@@ -100,31 +100,32 @@ export function DumpZone() {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl glass-panel">
+      <div className="flex h-11 shrink-0 items-center border-b border-white/5 bg-neutral-950/20 px-4">
+        <div className="group/dots flex items-center gap-1.5">
+          <button
+            onClick={() => setActiveTab("all")}
+            className="flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-rose-600/30 bg-rose-500/80 text-rose-950 transition-colors hover:bg-rose-500"
+            title="Close Dump Zone"
+          >
+            <span className="pointer-events-none text-[8px] font-extrabold opacity-0 transition-opacity group-hover/dots:opacity-100">×</span>
+          </button>
+          <button
+            onClick={toggleFocusMode}
+            className="flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-emerald-600/30 bg-emerald-500/80 text-emerald-950 transition-colors hover:bg-emerald-500"
+            title={isFocusMode ? "Exit Zen Mode" : "Zen Focus Mode"}
+          >
+            <span className="pointer-events-none text-[8px] font-extrabold opacity-0 transition-opacity group-hover/dots:opacity-100">⤢</span>
+          </button>
+        </div>
+      </div>
+
       <header className="flex items-center justify-between border-b border-white/[0.06] px-7 py-5">
-        <div className="flex items-center gap-4">
-          <div className="group/dots flex items-center gap-1.5">
-            <button
-              onClick={() => setActiveTab("all")}
-              className="flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-rose-600/30 bg-rose-500/80 text-rose-950 transition-colors hover:bg-rose-500"
-              title="Close Dump Zone"
-            >
-              <span className="pointer-events-none text-[8px] font-extrabold opacity-0 transition-opacity group-hover/dots:opacity-100">×</span>
-            </button>
-            <button
-              onClick={toggleFocusMode}
-              className="flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-emerald-600/30 bg-emerald-500/80 text-emerald-950 transition-colors hover:bg-emerald-500"
-              title={isFocusMode ? "Exit Zen Mode" : "Zen Focus Mode"}
-            >
-              <span className="pointer-events-none text-[8px] font-extrabold opacity-0 transition-opacity group-hover/dots:opacity-100">⤢</span>
-            </button>
-          </div>
-          <div>
+        <div>
           <div className="flex items-center gap-2.5">
             <Flame className="h-4 w-4 text-orange-300" />
             <h1 className="text-sm font-bold tracking-tight text-white">Dump zone</h1>
           </div>
           <p className="mt-1.5 text-[10px] font-medium text-zinc-500">Write it. Release it. Every line disappears 10 seconds after your last edit.</p>
-          </div>
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-orange-300/15 bg-orange-300/[0.06] px-3 py-1.5 text-[10px] font-bold text-orange-200/80">
           <TimerReset className="h-3 w-3" />
