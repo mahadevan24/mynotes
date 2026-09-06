@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Flame, TimerReset } from "lucide-react";
+import { useNotes } from "@/context/NotesContext";
 
 const LINE_LIFETIME_MS = 10_000;
 const FADE_DURATION_MS = 500;
@@ -21,6 +22,7 @@ function makeLine(): DumpLine {
 }
 
 export function DumpZone() {
+  const { isFocusMode, setActiveTab, toggleFocusMode } = useNotes();
   const [lines, setLines] = useState<DumpLine[]>(() => [makeLine()]);
   const [now, setNow] = useState(0);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
@@ -59,8 +61,14 @@ export function DumpZone() {
         focusAfterUpdate.current = blank.id;
         return [blank];
       }
-      const targetIndex = Math.max(0, Math.min(firstExpiredIndex - 1, remaining.length - 1));
-      focusAfterUpdate.current = remaining[targetIndex].id;
+      const activeInput = document.activeElement;
+      const activeLineSurvives = remaining.some(
+        (line) => inputRefs.current.get(line.id) === activeInput,
+      );
+      if (!activeLineSurvives) {
+        const targetIndex = Math.max(0, Math.min(firstExpiredIndex - 1, remaining.length - 1));
+        focusAfterUpdate.current = remaining[targetIndex].id;
+      }
       return remaining;
     });
   }, [now, lines]);
@@ -93,12 +101,30 @@ export function DumpZone() {
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl glass-panel">
       <header className="flex items-center justify-between border-b border-white/[0.06] px-7 py-5">
-        <div>
+        <div className="flex items-center gap-4">
+          <div className="group/dots flex items-center gap-1.5">
+            <button
+              onClick={() => setActiveTab("all")}
+              className="flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-rose-600/30 bg-rose-500/80 text-rose-950 transition-colors hover:bg-rose-500"
+              title="Close Dump Zone"
+            >
+              <span className="pointer-events-none text-[8px] font-extrabold opacity-0 transition-opacity group-hover/dots:opacity-100">×</span>
+            </button>
+            <button
+              onClick={toggleFocusMode}
+              className="flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-emerald-600/30 bg-emerald-500/80 text-emerald-950 transition-colors hover:bg-emerald-500"
+              title={isFocusMode ? "Exit Zen Mode" : "Zen Focus Mode"}
+            >
+              <span className="pointer-events-none text-[8px] font-extrabold opacity-0 transition-opacity group-hover/dots:opacity-100">⤢</span>
+            </button>
+          </div>
+          <div>
           <div className="flex items-center gap-2.5">
             <Flame className="h-4 w-4 text-orange-300" />
             <h1 className="text-sm font-bold tracking-tight text-white">Dump zone</h1>
           </div>
           <p className="mt-1.5 text-[10px] font-medium text-zinc-500">Write it. Release it. Every line disappears 10 seconds after your last edit.</p>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-orange-300/15 bg-orange-300/[0.06] px-3 py-1.5 text-[10px] font-bold text-orange-200/80">
           <TimerReset className="h-3 w-3" />
@@ -123,7 +149,7 @@ export function DumpZone() {
                     else inputRefs.current.delete(line.id);
                   }}
                   value={line.text}
-                  onChange={(event) => updateLine(line.id, event.target.value, event.timeStamp)}
+                  onChange={(event) => updateLine(line.id, event.target.value, performance.now())}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
