@@ -25,6 +25,7 @@ import remarkGfm from "remark-gfm";
 import { remarkPreserveLines } from "@/lib/remark-preserve-lines";
 import { cn } from "@/lib/utils";
 import { MarkdownHelp } from "@/components/MarkdownHelp";
+import { MarkdownLink } from "@/components/MarkdownLink";
 import { JOURNAL_PROMPT_CATEGORIES } from "@/lib/journal-prompts";
 
 export const Editor: React.FC = () => {
@@ -581,31 +582,11 @@ export const Editor: React.FC = () => {
                       {children}
                     </pre>
                   ),
-                  // Clickable bidirectional Note Link protocol implementation
-                  a: ({ href, children }) => {
-                    const isNoteProtocol = href?.startsWith("#note-");
-                    console.log("ReactMarkdown Link component rendered:", { href, isNoteProtocol });
-                    const handleLinkClick = (e: React.MouseEvent) => {
-                      console.log("ReactMarkdown Link clicked!", { href, isNoteProtocol });
-                      if (isNoteProtocol && href) {
-                        e.preventDefault();
-                        const decodedTitle = decodeURIComponent(href.replace("#note-", ""));
-                        console.log("Navigating to note title:", decodedTitle);
-                        findOrCreateNoteByTitle(decodedTitle);
-                      }
-                    };
-
-                    return (
-                      <span 
-                        onClick={handleLinkClick}
-                        className={cn(
-                          "font-bold transition-colors underline underline-offset-4 cursor-pointer select-none text-zinc-300 hover:text-white"
-                        )}
-                      >
-                        {children}
-                      </span>
-                    );
-                  }
+                  a: ({ href, children }) => (
+                    <MarkdownLink href={href} onOpenNote={findOrCreateNoteByTitle}>
+                      {children}
+                    </MarkdownLink>
+                  )
                 }}
               >
                 {/* Parse standard markdown, but also preprocess note-links [[Title]] into standard links */}
