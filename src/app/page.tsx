@@ -5,6 +5,7 @@ import { NotesProvider, useNotes, Note } from "@/context/NotesContext";
 import { ThemeGlow } from "@/components/ThemeGlow";
 import { Sidebar } from "@/components/Sidebar";
 import { DailyTodos } from "@/components/DailyTodos";
+import { DumpZone } from "@/components/DumpZone";
 import { Editor } from "@/components/Editor";
 import { RightPanel } from "@/components/RightPanel";
 import { AuthOverlay } from "@/components/AuthOverlay";
@@ -342,7 +343,7 @@ function WorkspaceContent() {
 
       {/* 2. Middle Editor or consolidated dashboard */}
       <main className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
-        {activeTab === "daily-todos" ? <DailyTodos /> : <Editor />}
+        {activeTab === "daily-todos" ? <DailyTodos /> : activeTab === "dump-zone" ? <DumpZone /> : <Editor />}
       </main>
 
       {/* 3. Right Sidebar - Pomodoro Timer, Backlinks & Calendar */}

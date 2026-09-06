@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   TrendingUp
 } from "lucide-react";
+import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -75,6 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (!matchesSearch) return false;
     if (note.daily_kind === "todo") return false;
     if (activeTab === "daily-todos") return false;
+    if (activeTab === "dump-zone") return false;
     if (activeTab === "daily") return note.is_daily_note && note.daily_kind !== "note";
     if (activeTab === "daily-notes") return note.is_daily_note && note.daily_kind === "note";
     return true; // 'all' tab shows both standard and daily notes
@@ -260,10 +262,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </>}
           </button>
         <button onClick={() => setActiveTab("daily-todos")} title="Daily ToDos" className={cn("flex items-center gap-2 rounded-lg p-2 text-xs font-semibold", activeTab === "daily-todos" ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5", !leftSidebarCollapsed && "w-full")}><CheckSquare className="h-3.5 w-3.5" />{!leftSidebarCollapsed && "Daily ToDos"}</button>
+        <button onClick={() => setActiveTab("dump-zone")} title="Dump zone" className={cn("flex items-center gap-2 rounded-lg p-2 text-xs font-semibold", activeTab === "dump-zone" ? "bg-orange-300/10 text-orange-100" : "text-zinc-400 hover:bg-white/5", !leftSidebarCollapsed && "w-full")}><Flame className="h-3.5 w-3.5" />{!leftSidebarCollapsed && "Dump zone"}</button>
         </nav>
 
         {/* Section Header or Quick Add Button */}
-        {activeTab === "daily-todos" ? <p className="mt-5 text-xs text-zinc-500">{!leftSidebarCollapsed && "One day at a time. Add your tasks in Daily ToDos."}</p> : leftSidebarCollapsed ? (
+        {activeTab === "daily-todos" || activeTab === "dump-zone" ? <p className="mt-5 text-xs text-zinc-500">{!leftSidebarCollapsed && (activeTab === "dump-zone" ? "Nothing here is saved. Every line is temporary." : "One day at a time. Add your tasks in Daily ToDos.")}</p> : leftSidebarCollapsed ? (
           (
             <button
               onClick={activeTab === "all" ? handleNewNote : handleNewDaily}
@@ -295,7 +298,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Note List Scroll Area (Only visible when expanded) */}
-        {!leftSidebarCollapsed && activeTab !== "daily-todos" && (
+        {!leftSidebarCollapsed && activeTab !== "daily-todos" && activeTab !== "dump-zone" && (
           <div className="flex-1 overflow-y-auto mt-2 space-y-1.5 pr-1 custom-scrollbar min-h-[140px] w-full">
             {/* Pinned Notes Section */}
             {pinnedNotes.length > 0 && (

@@ -45,8 +45,8 @@ interface NotesContextType {
   retrySync: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  activeTab: "all" | "daily" | "daily-notes" | "daily-todos";
-  setActiveTab: (tab: "all" | "daily" | "daily-notes" | "daily-todos") => void;
+  activeTab: "all" | "daily" | "daily-notes" | "daily-todos" | "dump-zone";
+  setActiveTab: (tab: "all" | "daily" | "daily-notes" | "daily-todos" | "dump-zone") => void;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   isFocusMode: boolean;
@@ -136,10 +136,10 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   const session = useRef(0);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "daily" | "daily-notes" | "daily-todos">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "daily" | "daily-notes" | "daily-todos" | "dump-zone">("all");
   const [selectedDate, setSelectedDate] = useState(() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; });
-  const [isFocusMode, setIsFocusMode] = useState(true);
-  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const activeNote = notes.find(note => note.id === activeId) ?? null;
