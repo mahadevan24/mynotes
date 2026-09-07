@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MyNotes — Premium AI Notepad & Journal",
+  title: "MyNotes",
   description: "A gorgeous distraction-free markdown note-taking app and daily journal featuring bidirectional linking, consolidated task checklists, and cloud sync.",
 };
 
